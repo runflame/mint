@@ -1,0 +1,2 @@
+# mint
+Minting algorithm
