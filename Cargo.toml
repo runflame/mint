@@ -8,3 +8,4 @@ edition = "2018"
 
 [dependencies]
 bitcoin = "0.26.1"
+bitcoincore-rpc = "0.13.0"
