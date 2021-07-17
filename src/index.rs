@@ -33,11 +33,11 @@ impl Index {
                 let reorg_info = self.check_for_reorgs();
                 let old_height = match reorg_info {
                     Some(reorg_info) => {
-                        for discarded_block in reorg_info.discarded_blocks {
-                            self.index.remove(&discarded_block).expect("Discarded block hashes must be given from the index");
+                        for discarded_block in reorg_info.discarded_blocks.iter() {
+                            self.index.remove(discarded_block).expect("Discarded block hashes must be given from the index");
                         }
                         let fork_position_in_checked_chain = self.checked_chain.len()-reorg_info.discarded_blocks.len();
-                        self.checked_chain.drain(..fork_position_in_checked_chain).collect();
+                        self.checked_chain.drain(..fork_position_in_checked_chain).collect::<Vec<_>>();
                         reorg_info.height_when_fork
                     }
                     None => self.blocks
