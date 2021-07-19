@@ -1,6 +1,6 @@
+use bitcoin::{Block, BlockHash};
+use bitcoincore_rpc::json::{GetBlockHeaderResult, GetBlockchainInfoResult};
 use std::error::Error;
-use bitcoincore_rpc::json::{GetBlockchainInfoResult, GetBlockHeaderResult};
-use bitcoin::{BlockHash, Block};
 
 /// Trait is used to abstract from the concrete implementation of a client.
 pub trait BitcoinClient {

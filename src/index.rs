@@ -1,11 +1,11 @@
-use bitcoincore_rpc::RpcApi;
-use bitcoin::{Transaction, BlockHash, Txid, Block};
-use bitcoin::blockdata::script::Instruction;
-use bitcoin::blockdata::opcodes;
-use std::collections::HashMap;
-use std::cmp::Ordering;
-use bitcoincore_rpc::json::GetBlockHeaderResult;
 use crate::bitcoin_client::BitcoinClient;
+use bitcoin::blockdata::opcodes;
+use bitcoin::blockdata::script::Instruction;
+use bitcoin::{Block, BlockHash, Transaction, Txid};
+use bitcoincore_rpc::json::GetBlockHeaderResult;
+use bitcoincore_rpc::RpcApi;
+use std::cmp::Ordering;
+use std::collections::HashMap;
 
 pub struct Index<C: BitcoinClient> {
     client: C,
@@ -22,7 +22,13 @@ impl<C: BitcoinClient> Index<C> {
         let height = info.blocks - 1;
         let checked_chain = Vec::new();
         let index = HashMap::new();
-        Index { client, tip, height, checked_chain, index }
+        Index {
+            client,
+            tip,
+            height,
+            checked_chain,
+            index,
+        }
     }
 
     pub fn check_last_blocks(&mut self) {
@@ -30,21 +36,28 @@ impl<C: BitcoinClient> Index<C> {
         let new_height = new_blockchain_info.blocks - 1;
         match self.height.cmp(&new_height) {
             Ordering::Equal => return,
-            Ordering::Greater => unimplemented!("TODO: is it possible that chain will be less than previous?"),
+            Ordering::Greater => {
+                unimplemented!("TODO: is it possible that chain will be less than previous?")
+            }
             Ordering::Less => {
                 let reorg_info = self.check_for_reorgs();
                 let old_height = match reorg_info {
                     Some(reorg_info) => {
                         for discarded_block in reorg_info.discarded_blocks.iter() {
-                            self.index.remove(discarded_block).expect("Discarded block hashes must be given from the index");
+                            self.index
+                                .remove(discarded_block)
+                                .expect("Discarded block hashes must be given from the index");
                         }
-                        let fork_position_in_checked_chain = self.checked_chain.len()-reorg_info.discarded_blocks.len();
-                        self.checked_chain.drain(..fork_position_in_checked_chain).for_each(drop);
+                        let fork_position_in_checked_chain =
+                            self.checked_chain.len() - reorg_info.discarded_blocks.len();
+                        self.checked_chain
+                            .drain(..fork_position_in_checked_chain)
+                            .for_each(drop);
                         reorg_info.height_when_fork
                     }
-                    None => self.height
+                    None => self.height,
                 };
-                for index in old_height+1..new_height+1 {
+                for index in old_height + 1..new_height + 1 {
                     let hash = self.client.get_block_hash(index).unwrap();
                     self.add_next_block_to_index(hash);
                 }
@@ -64,8 +77,7 @@ impl<C: BitcoinClient> Index<C> {
             let block_header_info = self.client.get_block_header_info(&block_hash).unwrap();
             if is_block_in_main_chain(&block_header_info) {
                 break;
-            }
-            else {
+            } else {
                 discarded_blocks.push(block_header_info.hash);
             }
         }
@@ -110,36 +122,40 @@ struct ReorgInfo {
 
 pub fn parse_mint_transaction(tx: Transaction) -> Option<BitcoinMintOutput> {
     let txid = tx.txid();
-    tx.output.iter().enumerate().filter_map(|(out_pos, out)| {
-        let mut instructions = out.script_pubkey.instructions();
-        let first_instruction = instructions.next().and_then(|res| res.ok());
-        match first_instruction {
-            Some(Instruction::Op(opcodes::all::OP_RETURN)) => {
-                let push_bytes_instr = instructions.next().and_then(|res| res.ok());
-                let bytes = match push_bytes_instr {
-                    Some(Instruction::PushBytes(bytes)) => bytes,
-                    _ => return None
-                };
-                let amount = out.value;
-                let bytes = Box::<[u8]>::from(bytes);
-                Some(BitcoinMintOutput {
-                    index: BitcoinMintOutputIndex {
-                        txid,
-                        output_position: out_pos as u64,
-                    },
-                    amount,
-                    bytes
-                })
+    tx.output
+        .iter()
+        .enumerate()
+        .filter_map(|(out_pos, out)| {
+            let mut instructions = out.script_pubkey.instructions();
+            let first_instruction = instructions.next().and_then(|res| res.ok());
+            match first_instruction {
+                Some(Instruction::Op(opcodes::all::OP_RETURN)) => {
+                    let push_bytes_instr = instructions.next().and_then(|res| res.ok());
+                    let bytes = match push_bytes_instr {
+                        Some(Instruction::PushBytes(bytes)) => bytes,
+                        _ => return None,
+                    };
+                    let amount = out.value;
+                    let bytes = Box::<[u8]>::from(bytes);
+                    Some(BitcoinMintOutput {
+                        index: BitcoinMintOutputIndex {
+                            txid,
+                            output_position: out_pos as u64,
+                        },
+                        amount,
+                        bytes,
+                    })
+                }
+                _ => None,
             }
-            _ => { None }
-        }
-    }).next()
+        })
+        .next()
 }
 
 pub struct BitcoinMintOutput {
     index: BitcoinMintOutputIndex,
     amount: u64,
-    bytes: Box<[u8]>
+    bytes: Box<[u8]>,
 }
 
 pub struct BitcoinMintOutputIndex {
@@ -150,14 +166,14 @@ pub struct BitcoinMintOutputIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitcoincore_rpc::bitcoincore_rpc_json::GetBlockchainInfoResult;
-    use std::convert::Infallible;
-    use bitcoin::{BlockHeader, TxOut};
+    use bitcoin::blockdata::script;
     use bitcoin::hashes::sha256d;
     use bitcoin::hashes::Hash;
-    use std::rc::Rc;
+    use bitcoin::{BlockHeader, TxOut};
+    use bitcoincore_rpc::bitcoincore_rpc_json::GetBlockchainInfoResult;
     use std::cell::RefCell;
-    use bitcoin::blockdata::script;
+    use std::convert::Infallible;
+    use std::rc::Rc;
 
     #[derive(Clone)]
     struct TestBlock {
@@ -168,7 +184,7 @@ mod tests {
     }
 
     struct TestBitcoinClient {
-        blocks: Rc<RefCell<Vec<TestBlock>>>
+        blocks: Rc<RefCell<Vec<TestBlock>>>,
     }
 
     impl BitcoinClient for TestBitcoinClient {
@@ -192,17 +208,29 @@ mod tests {
                 automatic_pruning: None,
                 prune_target_size: None,
                 softforks: Default::default(),
-                warnings: "".to_string()
+                warnings: "".to_string(),
             })
         }
 
         fn get_block_hash(&self, height: u64) -> Result<BlockHash, Self::Err> {
-            Ok(self.blocks.borrow().iter().find(|block| block.height == height && block.in_main_chain).unwrap().block_hash)
+            Ok(self
+                .blocks
+                .borrow()
+                .iter()
+                .find(|block| block.height == height && block.in_main_chain)
+                .unwrap()
+                .block_hash)
         }
 
-        fn get_block_header_info(&self, hash: &BlockHash) -> Result<GetBlockHeaderResult, Self::Err> {
+        fn get_block_header_info(
+            &self,
+            hash: &BlockHash,
+        ) -> Result<GetBlockHeaderResult, Self::Err> {
             let blocks = self.blocks.borrow();
-            let index = blocks.iter().position(|block| block.block_hash == *hash).unwrap();
+            let index = blocks
+                .iter()
+                .position(|block| block.block_hash == *hash)
+                .unwrap();
             let block = &blocks[index];
             Ok(GetBlockHeaderResult {
                 hash: block.block_hash.clone(),
@@ -219,13 +247,16 @@ mod tests {
                 chainwork: vec![],
                 n_tx: 0,
                 previous_block_hash: None,
-                next_block_hash: None
+                next_block_hash: None,
             })
         }
 
         fn get_block(&self, hash: &BlockHash) -> Result<Block, Self::Err> {
             let blocks = self.blocks.borrow();
-            let index = blocks.iter().position(|block| block.block_hash == *hash).unwrap();
+            let index = blocks
+                .iter()
+                .position(|block| block.block_hash == *hash)
+                .unwrap();
             let block = &blocks[index];
             Ok(Block {
                 header: BlockHeader {
@@ -234,9 +265,9 @@ mod tests {
                     merkle_root: Default::default(),
                     time: 0,
                     bits: 0,
-                    nonce: 0
+                    nonce: 0,
                 },
-                txdata: block.txs.clone()
+                txdata: block.txs.clone(),
             })
         }
     }
@@ -247,7 +278,9 @@ mod tests {
         let block2 = create_test_block(1, [2]);
 
         let blocks = Rc::new(RefCell::new(vec![initial_block.clone()]));
-        let mut client = TestBitcoinClient { blocks: blocks.clone() };
+        let mut client = TestBitcoinClient {
+            blocks: blocks.clone(),
+        };
         let mut index = Index::new(client);
 
         assert_eq!(index.height, 0);
@@ -266,10 +299,12 @@ mod tests {
     #[test]
     fn test_new_blocks_with_mint_txs() {
         let initial_block = create_test_block(0, [1]);
-        let block2 = create_test_block_with_mint_tx(1,[2], [1,2,3,4]);
+        let block2 = create_test_block_with_mint_tx(1, [2], [1, 2, 3, 4]);
 
         let blocks = Rc::new(RefCell::new(vec![initial_block.clone()]));
-        let mut client = TestBitcoinClient { blocks: blocks.clone() };
+        let mut client = TestBitcoinClient {
+            blocks: blocks.clone(),
+        };
         let mut index = Index::new(client);
 
         blocks.borrow_mut().push(block2.clone());
@@ -279,18 +314,20 @@ mod tests {
         let txs_in_index = index.index.get(&block2.block_hash).unwrap();
         let block2_tx_out = &txs_in_index[0];
         assert_eq!(block2_tx_out.amount, 10);
-        assert_eq!(block2_tx_out.bytes, (&[1u8,2,3,4] as &[_]).into());
+        assert_eq!(block2_tx_out.bytes, (&[1u8, 2, 3, 4] as &[_]).into());
     }
 
     #[test]
     fn test_reorg() {
         let initial_block = create_test_block(0, [1]);
-        let block2 = create_test_block_with_mint_tx(1, [2], [1,2,3,4]);
-        let forked_block = create_test_block_with_mint_tx(1, [3], [6,7,8,9]);
+        let block2 = create_test_block_with_mint_tx(1, [2], [1, 2, 3, 4]);
+        let forked_block = create_test_block_with_mint_tx(1, [3], [6, 7, 8, 9]);
         let forked_block2 = create_test_block_with_mint_tx(2, [4], [10]);
 
         let blocks = Rc::new(RefCell::new(vec![initial_block.clone()]));
-        let mut client = TestBitcoinClient { blocks: blocks.clone() };
+        let mut client = TestBitcoinClient {
+            blocks: blocks.clone(),
+        };
         let mut index = Index::new(client);
 
         blocks.borrow_mut().push(block2.clone());
@@ -300,7 +337,10 @@ mod tests {
 
         *blocks.borrow_mut() = vec![
             initial_block.clone(), // first block in both chains
-            TestBlock { in_main_chain: false, ..block2 }, // was in the main chain, after reorg is not
+            TestBlock {
+                in_main_chain: false,
+                ..block2
+            }, // was in the main chain, after reorg is not
             forked_block.clone(),
             forked_block2.clone(),
         ];
@@ -311,7 +351,7 @@ mod tests {
 
         let txs_in_index = index.index.get(&forked_block.block_hash).unwrap();
         let forked_block_tx_out = &txs_in_index[0];
-        assert_eq!(forked_block_tx_out.bytes, (&[6u8,7,8,9] as &[_]).into());
+        assert_eq!(forked_block_tx_out.bytes, (&[6u8, 7, 8, 9] as &[_]).into());
 
         let txs_in_index = index.index.get(&forked_block2.block_hash).unwrap();
         let forked_block2_tx_out = &txs_in_index[0];
@@ -323,31 +363,31 @@ mod tests {
             height,
             block_hash: BlockHash::from_hash(sha256d::Hash::hash(data.as_ref())),
             in_main_chain: true,
-            txs: vec![]
+            txs: vec![],
         }
     }
 
-    fn create_test_block_with_mint_tx(height: u64, data: impl AsRef<[u8]>, tx_data: impl AsRef<[u8]>) -> TestBlock {
+    fn create_test_block_with_mint_tx(
+        height: u64,
+        data: impl AsRef<[u8]>,
+        tx_data: impl AsRef<[u8]>,
+    ) -> TestBlock {
         TestBlock {
             height,
             block_hash: BlockHash::from_hash(sha256d::Hash::hash(data.as_ref())),
             in_main_chain: true,
-            txs: vec![
-                Transaction {
-                    version: 0,
-                    lock_time: 0,
-                    input: vec![],
-                    output: vec![
-                        TxOut {
-                            value: 10,
-                            script_pubkey: script::Builder::new()
-                                .push_opcode(opcodes::all::OP_RETURN)
-                                .push_slice(tx_data.as_ref())
-                                .into_script()
-                        }
-                    ]
-                }
-            ]
+            txs: vec![Transaction {
+                version: 0,
+                lock_time: 0,
+                input: vec![],
+                output: vec![TxOut {
+                    value: 10,
+                    script_pubkey: script::Builder::new()
+                        .push_opcode(opcodes::all::OP_RETURN)
+                        .push_slice(tx_data.as_ref())
+                        .into_script(),
+                }],
+            }],
         }
     }
 }
