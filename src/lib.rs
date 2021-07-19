@@ -1,4 +1,5 @@
 mod index;
+mod bitcoin_client;
 
 extern crate bitcoin;
 use bitcoin::Block;
