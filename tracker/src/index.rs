@@ -3,7 +3,6 @@ use bitcoin::blockdata::opcodes;
 use bitcoin::blockdata::script::Instruction;
 use bitcoin::{Block, BlockHash, Transaction, Txid};
 use bitcoincore_rpc::json::GetBlockHeaderResult;
-use bitcoincore_rpc::RpcApi;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
@@ -94,11 +93,6 @@ impl<C: BitcoinClient> Index<C> {
             self.index.insert(block_hash, transactions);
         }
         self.checked_chain.push(block_hash);
-    }
-
-    fn check_bitcoin_block_with_id(&self, id: u64) -> Vec<BitcoinMintOutput> {
-        let hash = self.client.get_block_hash(id).unwrap();
-        self.check_bitcoin_block_with_hash(hash)
     }
 
     fn check_bitcoin_block_with_hash(&self, hash: BlockHash) -> Vec<BitcoinMintOutput> {
@@ -278,7 +272,7 @@ mod tests {
         let block2 = create_test_block(1, [2]);
 
         let blocks = Rc::new(RefCell::new(vec![initial_block.clone()]));
-        let mut client = TestBitcoinClient {
+        let client = TestBitcoinClient {
             blocks: blocks.clone(),
         };
         let mut index = Index::new(client);
@@ -302,7 +296,7 @@ mod tests {
         let block2 = create_test_block_with_mint_tx(1, [2], [1, 2, 3, 4]);
 
         let blocks = Rc::new(RefCell::new(vec![initial_block.clone()]));
-        let mut client = TestBitcoinClient {
+        let client = TestBitcoinClient {
             blocks: blocks.clone(),
         };
         let mut index = Index::new(client);
@@ -325,7 +319,7 @@ mod tests {
         let forked_block2 = create_test_block_with_mint_tx(2, [4], [10]);
 
         let blocks = Rc::new(RefCell::new(vec![initial_block.clone()]));
-        let mut client = TestBitcoinClient {
+        let client = TestBitcoinClient {
             blocks: blocks.clone(),
         };
         let mut index = Index::new(client);
