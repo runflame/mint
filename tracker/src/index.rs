@@ -120,7 +120,7 @@ struct ReorgInfo {
     discarded_blocks: Vec<BlockHash>,
 }
 
-pub fn parse_mint_transaction(tx: Transaction) -> Option<BitcoinMintOutput> {
+fn parse_mint_transaction(tx: Transaction) -> Option<BitcoinMintOutput> {
     let txid = tx.txid();
     tx.output
         .iter()

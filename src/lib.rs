@@ -1,6 +1,3 @@
-mod bitcoin_client;
-mod index;
-
 extern crate bitcoin;
 use bitcoin::Block;
 

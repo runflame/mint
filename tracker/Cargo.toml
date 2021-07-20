@@ -1,10 +1,11 @@
 [package]
-name = "mint"
+name = "tracker"
 version = "0.1.0"
-authors = ["Oleg Andreev <oleganza@gmail.com>"]
+authors = ["p0lunin <dmytro.polunin@gmail.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 bitcoin = "0.26.1"
+bitcoincore-rpc = "0.13.0"
