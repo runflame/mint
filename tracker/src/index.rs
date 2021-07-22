@@ -8,26 +8,27 @@ use std::collections::HashMap;
 
 pub struct Index<C: BitcoinClient> {
     client: C,
-    tip: BlockHash,
     height: u64,
     checked_chain: Vec<BlockHash>,
     index: HashMap<BlockHash, Vec<BitcoinMintOutput>>,
 }
 
 impl<C: BitcoinClient> Index<C> {
-    pub fn new(client: C) -> Self {
+    pub fn new(client: C, base_height: Option<u64>) -> Self {
         let info = client.get_blockchain_info().unwrap();
-        let tip = info.best_block_hash;
-        let height = info.blocks - 1;
+        let height = base_height.unwrap_or(info.blocks - 1);
         let checked_chain = Vec::new();
         let index = HashMap::new();
         Index {
             client,
-            tip,
             height,
             checked_chain,
             index,
         }
+    }
+
+    pub fn checked_height(&self) -> u64 {
+        self.height
     }
 
     pub fn check_last_blocks(&mut self) {
@@ -50,8 +51,7 @@ impl<C: BitcoinClient> Index<C> {
                         let fork_position_in_checked_chain =
                             self.checked_chain.len() - reorg_info.discarded_blocks.len();
                         self.checked_chain
-                            .drain(..fork_position_in_checked_chain)
-                            .for_each(drop);
+                            .drain(..fork_position_in_checked_chain);
                         reorg_info.height_when_fork
                     }
                     None => self.height,
@@ -61,17 +61,21 @@ impl<C: BitcoinClient> Index<C> {
                     self.add_next_block_to_index(hash);
                 }
                 self.height = new_height;
-                self.tip = new_blockchain_info.best_block_hash;
             }
         }
     }
 
+    pub fn get_index(&self) -> &HashMap<BlockHash, Vec<BitcoinMintOutput>> {
+        &self.index
+    }
+
     fn check_for_reorgs(&self) -> Option<ReorgInfo> {
-        let last_tip_block = self.client.get_block_header_info(&self.tip).unwrap();
+        let tip = self.checked_chain.last()?;
+        let last_tip_block = self.client.get_block_header_info(tip).unwrap();
         if is_block_in_main_chain(&last_tip_block) {
             return None;
         }
-        let mut discarded_blocks = vec![self.tip];
+        let mut discarded_blocks = vec![tip.clone()];
         for block_hash in self.checked_chain.iter().rev().skip(1) {
             let block_header_info = self.client.get_block_header_info(&block_hash).unwrap();
             if is_block_in_main_chain(&block_header_info) {
@@ -102,6 +106,11 @@ impl<C: BitcoinClient> Index<C> {
         let mint_txs = txs.into_iter().filter_map(parse_mint_transaction).collect();
 
         mint_txs
+    }
+
+    #[cfg(test)]
+    fn tip(&self) -> BlockHash {
+        self.checked_chain.last().unwrap().clone()
     }
 }
 
@@ -146,12 +155,14 @@ fn parse_mint_transaction(tx: Transaction) -> Option<BitcoinMintOutput> {
         .next()
 }
 
+#[derive(Debug)]
 pub struct BitcoinMintOutput {
-    index: BitcoinMintOutputIndex,
-    amount: u64,
-    bytes: Box<[u8]>,
+    pub index: BitcoinMintOutputIndex,
+    pub amount: u64,
+    pub bytes: Box<[u8]>,
 }
 
+#[derive(Debug)]
 pub struct BitcoinMintOutputIndex {
     txid: Txid,
     output_position: u64,
@@ -275,18 +286,18 @@ mod tests {
         let client = TestBitcoinClient {
             blocks: blocks.clone(),
         };
-        let mut index = Index::new(client);
+        let mut index = Index::new(client, None);
 
         assert_eq!(index.height, 0);
         assert_eq!(index.checked_chain, vec![]);
-        assert_eq!(index.tip, initial_block.block_hash);
+        assert_eq!(index.tip(), initial_block.block_hash);
 
         blocks.borrow_mut().push(block2.clone());
         index.check_last_blocks();
 
         assert_eq!(index.height, 1);
         assert_eq!(index.checked_chain, vec![block2.block_hash.clone()]);
-        assert_eq!(index.tip, block2.block_hash.clone());
+        assert_eq!(index.tip(), block2.block_hash.clone());
         assert_eq!(index.index.len(), 0);
     }
 
@@ -299,7 +310,7 @@ mod tests {
         let client = TestBitcoinClient {
             blocks: blocks.clone(),
         };
-        let mut index = Index::new(client);
+        let mut index = Index::new(client, None);
 
         blocks.borrow_mut().push(block2.clone());
         index.check_last_blocks();
@@ -322,7 +333,7 @@ mod tests {
         let client = TestBitcoinClient {
             blocks: blocks.clone(),
         };
-        let mut index = Index::new(client);
+        let mut index = Index::new(client, None);
 
         blocks.borrow_mut().push(block2.clone());
         index.check_last_blocks();
