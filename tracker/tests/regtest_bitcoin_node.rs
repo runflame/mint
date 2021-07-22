@@ -1,12 +1,16 @@
 use bitcoincore_rpc::{Client, Auth, RpcApi};
 use std::collections::HashMap;
-use bitcoin::{TxOut, Transaction, TxIn};
+use bitcoin::{TxOut, Transaction, TxIn, Block, BlockHeader, BlockHash};
 use bitcoin::blockdata::{script, opcodes};
 use bitcoin::consensus::{Encodable, Decodable};
 use std::time::Duration;
 use bitcoin::hashes::hex::ToHex;
 use tracker::Index;
 use std::process::Stdio;
+use serde::Serialize;
+use serde_json::Value;
+use bitcoin::hashes::sha256d::Hash;
+use std::str::FromStr;
 
 fn setup_node(port: u32, rpcport: u32, datadir: &str) -> std::process::Child {
     let child = std::process::Command::new("bash")
@@ -80,20 +84,37 @@ fn test_new_blocks_with_mint_txs() {
     let funded = client.fund_raw_transaction(&bytes, None, None).unwrap();
     let signed = client.sign_raw_transaction_with_wallet(&funded.hex, None, None).unwrap();
     assert!(signed.complete);
-    client.send_raw_transaction(&signed.hex).unwrap();
+    let tx_id = client.send_raw_transaction(&signed.hex).unwrap();
 
-    let block_hashes = client.generate_to_address(1, &address).unwrap();
-    let mint_block = block_hashes.last().unwrap().clone();
-    let block = client.get_block(&mint_block).unwrap();
-    dbg!(mint_block);
-    dbg!(block);
+    let value: Value = client.call(
+        "generateblock",
+        &[
+            Value::String(address.to_string()),
+            Value::Array(vec![Value::String(tx_id.as_hash().to_hex())])
+        ]).unwrap();
+
+    let hash = match value {
+        Value::Object(m) => {
+            match m.get("hash").unwrap() {
+                Value::String(hash) => hash.clone(),
+                _ => unreachable!()
+            }
+        }
+        _ => unreachable!()
+    };
+
+    let mint_block = BlockHash::from_hash(Hash::from_str(&hash).unwrap());
 
     let mut index = Index::new(client, Some(119));
+    index.add_bag([1; 32]);
 
     index.check_last_blocks();
-    assert_eq!(index.checked_height(), 120);
+    assert_eq!(index.checked_height(), 121);
 
-    let txs = dbg!(index.get_index());
+    let txs = index.get_index();
+
+    assert_eq!(txs.len(), 1);
+
     let txs1 = txs.get(&mint_block).unwrap();
     assert_eq!(txs1.last().unwrap().bag_id, [1; 32])
 }

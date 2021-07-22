@@ -21,7 +21,7 @@ pub struct Index<C: BitcoinClient> {
 impl<C: BitcoinClient> Index<C> {
     pub fn new(client: C, base_height: Option<u64>) -> Self {
         let info = client.get_blockchain_info().unwrap();
-        let height = base_height.unwrap_or(info.blocks - 1);
+        let height = base_height.unwrap_or(info.blocks);
         let checked_chain = Vec::new();
         let index = HashMap::new();
         let bags = vec![];
@@ -44,7 +44,7 @@ impl<C: BitcoinClient> Index<C> {
 
     pub fn check_last_blocks(&mut self) {
         let new_blockchain_info = self.client.get_blockchain_info().unwrap();
-        let new_height = new_blockchain_info.blocks - 1;
+        let new_height = new_blockchain_info.blocks;
         match self.height.cmp(&new_height) {
             Ordering::Equal => return,
             Ordering::Greater => {
@@ -67,8 +67,11 @@ impl<C: BitcoinClient> Index<C> {
                     }
                     None => self.height,
                 };
+                dbg!(new_height + 1);
                 for index in old_height + 1..new_height + 1 {
+                    dbg!(index);
                     let hash = self.client.get_block_hash(index).unwrap();
+                    dbg!(hash);
                     self.add_next_block_to_index(hash);
                 }
                 self.height = new_height;
@@ -219,7 +222,7 @@ mod tests {
             let blocks = self.blocks.borrow();
             Ok(GetBlockchainInfoResult {
                 chain: "rusttest".to_string(),
-                blocks: blocks.last().unwrap().height + 1,
+                blocks: blocks.last().unwrap().height,
                 headers: 0,
                 best_block_hash: blocks.last().unwrap().block_hash.clone(),
                 difficulty: 0.0,
