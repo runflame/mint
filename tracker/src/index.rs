@@ -1,7 +1,7 @@
 use crate::bitcoin_client::BitcoinClient;
 use bitcoin::blockdata::opcodes;
 use bitcoin::blockdata::script::Instruction;
-use bitcoin::{BlockHash, Transaction, Txid};
+use bitcoin::{BlockHash, Transaction, TxOut, Txid};
 use bitcoincore_rpc::json::GetBlockHeaderResult;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -49,36 +49,42 @@ impl<C: BitcoinClient> Index<C> {
             Ordering::Greater => {
                 unimplemented!("TODO: is it possible that chain will be less than previous?")
             }
-            Ordering::Less => {
-                let reorg_info = self.check_for_reorgs();
-                let old_height = match reorg_info {
-                    Some(reorg_info) => {
-                        for discarded_block in reorg_info.discarded_blocks.iter() {
-                            self.index
-                                .remove(discarded_block)
-                                .expect("Discarded block hashes must be given from the index");
-                        }
-                        let fork_position_in_checked_chain =
-                            self.checked_chain.len() - reorg_info.discarded_blocks.len();
-                        self.checked_chain.drain(..fork_position_in_checked_chain);
-                        reorg_info.height_when_fork
-                    }
-                    None => self.height,
-                };
-                dbg!(new_height + 1);
-                for index in old_height + 1..new_height + 1 {
-                    dbg!(index);
-                    let hash = self.client.get_block_hash(index).unwrap();
-                    dbg!(hash);
-                    self.add_next_block_to_index(hash);
-                }
-                self.height = new_height;
-            }
+            Ordering::Less => self.check_blocks(new_height),
         }
     }
 
     pub fn get_index(&self) -> &HashMap<BlockHash, Vec<BitcoinMintOutput>> {
         &self.index
+    }
+
+    fn check_blocks(&mut self, new_height: u64) {
+        let reorg_info = self.check_for_reorgs();
+
+        let old_height = match reorg_info {
+            Some(reorg_info) => self.remove_blocks_when_fork(reorg_info),
+            None => self.height,
+        };
+        self.add_blocks(old_height, new_height);
+        self.height = new_height;
+    }
+
+    fn remove_blocks_when_fork(&mut self, reorg_info: ReorgInfo) -> u64 {
+        for discarded_block in reorg_info.discarded_blocks.iter() {
+            self.index
+                .remove(discarded_block)
+                .expect("Discarded block hashes must be given from the index");
+        }
+        let fork_position_in_checked_chain =
+            self.checked_chain.len() - reorg_info.discarded_blocks.len();
+        self.checked_chain.drain(..fork_position_in_checked_chain);
+        reorg_info.height_when_fork
+    }
+
+    fn add_blocks(&mut self, old_height: u64, new_height: u64) {
+        for index in old_height + 1..new_height + 1 {
+            let hash = self.client.get_block_hash(index).unwrap();
+            self.add_next_block_to_index(hash);
+        }
     }
 
     fn check_for_reorgs(&self) -> Option<ReorgInfo> {
@@ -133,41 +139,53 @@ impl<C: BitcoinClient> Index<C> {
         tx.output
             .iter()
             .enumerate()
-            .filter_map(|(out_pos, out)| {
-                let mut instructions = out.script_pubkey.instructions();
-                let first_instruction = instructions.next().and_then(|res| res.ok());
-                match first_instruction {
-                    Some(Instruction::Op(opcodes::all::OP_RETURN)) => {
-                        let push_bytes_instr = instructions.next().and_then(|res| res.ok());
-                        let bytes = match push_bytes_instr {
-                            Some(Instruction::PushBytes(bytes)) => bytes,
-                            _ => return None,
-                        };
-                        let bag_id = match bytes.len() {
-                            32 => {
-                                let array = TryInto::<&[u8; 32]>::try_into(bytes).unwrap();
-                                array.clone()
-                            }
-                            _ => return None,
-                        };
-                        if !self.bags.iter().any(|bag| *bag == bag_id) {
-                            return None;
-                        }
-                        let amount = out.value;
-                        Some(BitcoinMintOutput {
-                            index: BitcoinMintOutputIndex {
-                                txid,
-                                output_position: out_pos as u64,
-                            },
-                            amount,
-                            bag_id,
-                        })
-                    }
-                    _ => None,
-                }
-            })
+            .filter_map(|(out_pos, out)| self.parse_mint_output(txid, out_pos as u64, out))
             .next()
     }
+
+    fn parse_mint_output(
+        &self,
+        txid: Txid,
+        out_pos: u64,
+        out: &TxOut,
+    ) -> Option<BitcoinMintOutput> {
+        let mut instructions = out.script_pubkey.instructions();
+
+        let first_instruction = instructions.next().and_then(|res| res.ok())?;
+        assert_instruction_return(first_instruction)?;
+
+        let push_bytes_instr = instructions.next().and_then(|res| res.ok())?;
+        let bag_id = parse_push_32_bytes(push_bytes_instr)?;
+
+        if !self.bags.iter().any(|bag| *bag == bag_id) {
+            return None;
+        }
+        let amount = out.value;
+        Some(BitcoinMintOutput {
+            index: BitcoinMintOutputIndex {
+                txid,
+                output_position: out_pos,
+            },
+            amount,
+            bag_id,
+        })
+    }
+}
+
+fn assert_instruction_return(instr: Instruction) -> Option<()> {
+    match instr {
+        Instruction::Op(opcodes::all::OP_RETURN) => Some(()),
+        _ => None,
+    }
+}
+
+fn parse_push_32_bytes(instr: Instruction) -> Option<[u8; 32]> {
+    let bytes = match instr {
+        Instruction::PushBytes(bytes) => bytes,
+        _ => return None,
+    };
+    let array = TryInto::<&[u8; 32]>::try_into(bytes).ok()?.clone();
+    Some(array)
 }
 
 fn is_block_in_main_chain(block: &GetBlockHeaderResult) -> bool {
