@@ -70,7 +70,7 @@ fn test_new_blocks_with_mint_txs() {
         input: vec![],
         output: vec![TxOut {
             value: 10,
-            script_pubkey: script::Script::new_op_return(&[0,1,2,3])
+            script_pubkey: script::Script::new_op_return(&[1; 32])
         }],
     };
 
@@ -95,7 +95,7 @@ fn test_new_blocks_with_mint_txs() {
 
     let txs = dbg!(index.get_index());
     let txs1 = txs.get(&mint_block).unwrap();
-    assert_eq!(txs1.last().unwrap().bytes, (&[0u8,1,2,3] as &[_]).into())
+    assert_eq!(txs1.last().unwrap().bag_id, [1; 32])
 }
 
 fn consensus_encode_tx<S: std::io::Write>(

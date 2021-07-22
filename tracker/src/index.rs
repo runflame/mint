@@ -5,12 +5,17 @@ use bitcoin::{Block, BlockHash, Transaction, Txid};
 use bitcoincore_rpc::json::GetBlockHeaderResult;
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::sync::mpsc::Receiver;
+use std::convert::TryInto;
+
+type BagId = [u8; 32];
 
 pub struct Index<C: BitcoinClient> {
     client: C,
     height: u64,
     checked_chain: Vec<BlockHash>,
     index: HashMap<BlockHash, Vec<BitcoinMintOutput>>,
+    bags: Vec<BagId>,
 }
 
 impl<C: BitcoinClient> Index<C> {
@@ -19,16 +24,22 @@ impl<C: BitcoinClient> Index<C> {
         let height = base_height.unwrap_or(info.blocks - 1);
         let checked_chain = Vec::new();
         let index = HashMap::new();
+        let bags = vec![];
         Index {
             client,
             height,
             checked_chain,
             index,
+            bags,
         }
     }
 
     pub fn checked_height(&self) -> u64 {
         self.height
+    }
+
+    pub fn add_bag(&mut self, bag: BagId) {
+        self.bags.push(bag);
     }
 
     pub fn check_last_blocks(&mut self) {
@@ -103,7 +114,7 @@ impl<C: BitcoinClient> Index<C> {
         let block = self.client.get_block(&hash).unwrap();
         let txs = block.txdata;
 
-        let mint_txs = txs.into_iter().filter_map(parse_mint_transaction).collect();
+        let mint_txs = txs.into_iter().filter_map(|tx| self.parse_mint_transaction(tx)).collect();
 
         mint_txs
     }
@@ -111,6 +122,47 @@ impl<C: BitcoinClient> Index<C> {
     #[cfg(test)]
     fn tip(&self) -> BlockHash {
         self.checked_chain.last().unwrap().clone()
+    }
+
+    fn parse_mint_transaction(&self, tx: Transaction) -> Option<BitcoinMintOutput> {
+        let txid = tx.txid();
+        tx.output
+            .iter()
+            .enumerate()
+            .filter_map(|(out_pos, out)| {
+                let mut instructions = out.script_pubkey.instructions();
+                let first_instruction = instructions.next().and_then(|res| res.ok());
+                match first_instruction {
+                    Some(Instruction::Op(opcodes::all::OP_RETURN)) => {
+                        let push_bytes_instr = instructions.next().and_then(|res| res.ok());
+                        let bytes = match push_bytes_instr {
+                            Some(Instruction::PushBytes(bytes)) => bytes,
+                            _ => return None,
+                        };
+                        let bag_id = match bytes.len() {
+                            32 => {
+                                let array = TryInto::<&[u8; 32]>::try_into(bytes).unwrap();
+                                array.clone()
+                            }
+                            _ => return None,
+                        };
+                        if !self.bags.iter().any(|bag| *bag == bag_id) {
+                            return None;
+                        }
+                        let amount = out.value;
+                        Some(BitcoinMintOutput {
+                            index: BitcoinMintOutputIndex {
+                                txid,
+                                output_position: out_pos as u64,
+                            },
+                            amount,
+                            bag_id,
+                        })
+                    }
+                    _ => None,
+                }
+            })
+            .next()
     }
 }
 
@@ -123,43 +175,11 @@ struct ReorgInfo {
     discarded_blocks: Vec<BlockHash>,
 }
 
-fn parse_mint_transaction(tx: Transaction) -> Option<BitcoinMintOutput> {
-    let txid = tx.txid();
-    tx.output
-        .iter()
-        .enumerate()
-        .filter_map(|(out_pos, out)| {
-            let mut instructions = out.script_pubkey.instructions();
-            let first_instruction = instructions.next().and_then(|res| res.ok());
-            match first_instruction {
-                Some(Instruction::Op(opcodes::all::OP_RETURN)) => {
-                    let push_bytes_instr = instructions.next().and_then(|res| res.ok());
-                    let bytes = match push_bytes_instr {
-                        Some(Instruction::PushBytes(bytes)) => bytes,
-                        _ => return None,
-                    };
-                    let amount = out.value;
-                    let bytes = Box::<[u8]>::from(bytes);
-                    Some(BitcoinMintOutput {
-                        index: BitcoinMintOutputIndex {
-                            txid,
-                            output_position: out_pos as u64,
-                        },
-                        amount,
-                        bytes,
-                    })
-                }
-                _ => None,
-            }
-        })
-        .next()
-}
-
 #[derive(Debug)]
 pub struct BitcoinMintOutput {
     pub index: BitcoinMintOutputIndex,
     pub amount: u64,
-    pub bytes: Box<[u8]>,
+    pub bag_id: BagId,
 }
 
 #[derive(Debug)]
@@ -290,7 +310,6 @@ mod tests {
 
         assert_eq!(index.height, 0);
         assert_eq!(index.checked_chain, vec![]);
-        assert_eq!(index.tip(), initial_block.block_hash);
 
         blocks.borrow_mut().push(block2.clone());
         index.check_last_blocks();
@@ -304,13 +323,15 @@ mod tests {
     #[test]
     fn test_new_blocks_with_mint_txs() {
         let initial_block = create_test_block(0, [1]);
-        let block2 = create_test_block_with_mint_tx(1, [2], [1, 2, 3, 4]);
+        let block2 = create_test_block_with_mint_tx(1, [2], [1; 32]);
 
         let blocks = Rc::new(RefCell::new(vec![initial_block.clone()]));
         let client = TestBitcoinClient {
             blocks: blocks.clone(),
         };
         let mut index = Index::new(client, None);
+
+        index.add_bag([1; 32]);
 
         blocks.borrow_mut().push(block2.clone());
         index.check_last_blocks();
@@ -319,21 +340,25 @@ mod tests {
         let txs_in_index = index.index.get(&block2.block_hash).unwrap();
         let block2_tx_out = &txs_in_index[0];
         assert_eq!(block2_tx_out.amount, 10);
-        assert_eq!(block2_tx_out.bytes, (&[1u8, 2, 3, 4] as &[_]).into());
+        assert_eq!(block2_tx_out.bag_id, [1; 32]);
     }
 
     #[test]
     fn test_reorg() {
         let initial_block = create_test_block(0, [1]);
-        let block2 = create_test_block_with_mint_tx(1, [2], [1, 2, 3, 4]);
-        let forked_block = create_test_block_with_mint_tx(1, [3], [6, 7, 8, 9]);
-        let forked_block2 = create_test_block_with_mint_tx(2, [4], [10]);
+        let block2 = create_test_block_with_mint_tx(1, [2], [1; 32]);
+        let forked_block = create_test_block_with_mint_tx(1, [3], [2; 32]);
+        let forked_block2 = create_test_block_with_mint_tx(2, [4], [3; 32]);
 
         let blocks = Rc::new(RefCell::new(vec![initial_block.clone()]));
         let client = TestBitcoinClient {
             blocks: blocks.clone(),
         };
         let mut index = Index::new(client, None);
+
+        index.add_bag([1; 32]);
+        index.add_bag([2; 32]);
+        index.add_bag([3; 32]);
 
         blocks.borrow_mut().push(block2.clone());
         index.check_last_blocks();
@@ -356,11 +381,11 @@ mod tests {
 
         let txs_in_index = index.index.get(&forked_block.block_hash).unwrap();
         let forked_block_tx_out = &txs_in_index[0];
-        assert_eq!(forked_block_tx_out.bytes, (&[6u8, 7, 8, 9] as &[_]).into());
+        assert_eq!(forked_block_tx_out.bag_id, [2; 32]);
 
         let txs_in_index = index.index.get(&forked_block2.block_hash).unwrap();
         let forked_block2_tx_out = &txs_in_index[0];
-        assert_eq!(forked_block2_tx_out.bytes, (&[10u8] as &[_]).into());
+        assert_eq!(forked_block2_tx_out.bag_id, [3; 32]);
     }
 
     fn create_test_block(height: u64, data: impl AsRef<[u8]>) -> TestBlock {
