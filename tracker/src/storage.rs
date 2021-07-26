@@ -1,3 +1,6 @@
+#[cfg(feature = "sqlite-storage")]
+mod sqlite;
+
 use crate::index::BagId;
 use bitcoin::{BlockHash, Txid};
 use std::cell::RefCell;
@@ -7,11 +10,10 @@ use std::error::Error;
 
 pub trait IndexStorage {
     type Err: Error;
-    type RecordsCursor: Iterator<Item = Record>;
     fn store_record(&self, record: Record) -> Result<(), Self::Err>;
     fn get_blocks_count(&self) -> Result<u64, Self::Err>;
     fn remove_with_block_hash(&self, hash: &BlockHash) -> Result<(), Self::Err>;
-    fn get_blocks_by_hash(&self, hash: &BlockHash) -> Result<Self::RecordsCursor, Self::Err>;
+    fn get_blocks_by_hash(&self, hash: &BlockHash) -> Result<Vec<Record>, Self::Err>;
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -39,7 +41,6 @@ impl MemoryIndexStorage {
 
 impl IndexStorage for MemoryIndexStorage {
     type Err = Infallible;
-    type RecordsCursor = std::vec::IntoIter<Record>;
 
     fn store_record(&self, record: Record) -> Result<(), Self::Err> {
         let mut this = self.0.borrow_mut();
@@ -57,9 +58,9 @@ impl IndexStorage for MemoryIndexStorage {
         Ok(())
     }
 
-    fn get_blocks_by_hash(&self, hash: &BlockHash) -> Result<Self::RecordsCursor, Self::Err> {
+    fn get_blocks_by_hash(&self, hash: &BlockHash) -> Result<Vec<Record>, Self::Err> {
         let this = self.0.borrow();
         let records = this.get(hash).map(Clone::clone).unwrap();
-        Ok(records.into_iter())
+        Ok(records)
     }
 }

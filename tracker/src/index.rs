@@ -266,8 +266,7 @@ mod tests {
         let txs_in_index = index
             .storage
             .get_blocks_by_hash(&block2.block_hash)
-            .unwrap()
-            .collect::<Vec<_>>();
+            .unwrap();
         let block2_tx_out = &txs_in_index[0];
 
         assert_eq!(block2_tx_out.data.amount, 10);
@@ -317,16 +316,14 @@ mod tests {
         let txs_in_index = index
             .storage
             .get_blocks_by_hash(&forked_block.block_hash)
-            .unwrap()
-            .collect::<Vec<_>>();
+            .unwrap();
         let forked_block_tx_out = &txs_in_index[0];
         assert_eq!(forked_block_tx_out.data.bag_id, [2; 32]);
 
         let txs_in_index = index
             .storage
             .get_blocks_by_hash(&forked_block2.block_hash)
-            .unwrap()
-            .collect::<Vec<_>>();
+            .unwrap();
         let forked_block2_tx_out = &txs_in_index[0];
         assert_eq!(forked_block2_tx_out.data.bag_id, [3; 32]);
     }

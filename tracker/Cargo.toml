@@ -4,11 +4,13 @@ version = "0.1.0"
 authors = ["p0lunin <dmytro.polunin@gmail.com>"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+sqlite-storage = ["rusqlite"]
 
 [dependencies]
 bitcoin = "0.26.1"
 bitcoincore-rpc = "0.13.0"
+rusqlite = { version = "0.25.3", features = ["bundled-windows", "blob"], optional = true }
 
 [dev-dependencies]
 serde = "1.0.126"
