@@ -8,6 +8,7 @@ use serde_json::Value;
 use std::process::Stdio;
 use std::str::FromStr;
 use std::time::Duration;
+use tracker::bitcoin_client::BitcoinMintExt;
 use tracker::Index;
 
 #[test]
@@ -29,25 +30,7 @@ fn test_new_blocks_with_mint_txs() {
     let address = client.get_new_address(Some("testwal"), None).unwrap();
     client.generate_to_address(120, &address).unwrap();
 
-    let tx = Transaction {
-        version: 2,
-        lock_time: 0,
-        input: vec![],
-        output: vec![TxOut {
-            value: 10,
-            script_pubkey: script::Script::new_op_return(&[1; 32]),
-        }],
-    };
-
-    let mut bytes = Vec::new();
-    consensus_encode_tx(&tx, &mut bytes).unwrap();
-
-    let funded = client.fund_raw_transaction(&bytes, None, None).unwrap();
-    let signed = client
-        .sign_raw_transaction_with_wallet(&funded.hex, None, None)
-        .unwrap();
-    assert!(signed.complete);
-    let tx_id = client.send_raw_transaction(&signed.hex).unwrap();
+    let tx_id = client.send_mint_transaction(10, &[1; 32]).unwrap();
 
     let value: Value = client
         .call(
@@ -113,18 +96,4 @@ impl Drop for TempDir {
     fn drop(&mut self) {
         std::fs::remove_dir_all(self.path.as_str()).unwrap_or_else(|_| ());
     }
-}
-
-// `bitcoin` crate provide uparseable output with it's `consensus_encode` method for transactions
-// with zero inputs.
-pub fn consensus_encode_tx<S: std::io::Write>(
-    tx: &Transaction,
-    mut s: S,
-) -> Result<usize, std::io::Error> {
-    let mut len = 0;
-    len += tx.version.consensus_encode(&mut s)?;
-    len += tx.input.consensus_encode(&mut s)?;
-    len += tx.output.consensus_encode(&mut s)?;
-    len += tx.lock_time.consensus_encode(s)?;
-    Ok(len)
 }

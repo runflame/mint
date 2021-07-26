@@ -1,13 +1,13 @@
 use crate::bitcoin_client::BitcoinClient;
 use bitcoin::blockdata::{opcodes, script};
-use bitcoin::consensus::Encodable;
 use bitcoin::hashes::Hash;
-use bitcoin::{Block, BlockHash, BlockHeader, Transaction, TxOut};
+use bitcoin::{Block, BlockHash, BlockHeader, Transaction, TxOut, Txid};
+use bitcoincore_rpc::bitcoincore_rpc_json::{FundRawTransactionResult, SignRawTransactionResult};
 use bitcoincore_rpc::json::GetBlockHeaderResult;
 use bitcoincore_rpc::json::GetBlockchainInfoResult;
+use bitcoincore_rpc::RawTx;
 use std::cell::RefCell;
 use std::convert::Infallible;
-use std::process::Stdio;
 use std::rc::Rc;
 
 #[derive(Clone)]
@@ -102,10 +102,28 @@ impl BitcoinClient for TestBitcoinClient {
             txdata: block.txs.clone(),
         })
     }
+
+    fn fund_raw_transaction<R: RawTx>(
+        &self,
+        _tx: R,
+    ) -> Result<FundRawTransactionResult, Self::Err> {
+        unimplemented!()
+    }
+
+    fn sign_raw_transaction_with_wallet<R: RawTx>(
+        &self,
+        _tx: R,
+    ) -> Result<SignRawTransactionResult, Self::Err> {
+        unimplemented!()
+    }
+
+    fn send_raw_transaction<R: RawTx>(&self, _tx: R) -> Result<Txid, Self::Err> {
+        unimplemented!()
+    }
 }
 
 pub fn create_test_block(height: u64, data: impl AsRef<[u8]>) -> TestBlock {
-    use bitcoin::hashes::{sha256d, sha256d::Hash};
+    use bitcoin::hashes::sha256d;
 
     TestBlock {
         height,

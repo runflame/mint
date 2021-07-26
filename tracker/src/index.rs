@@ -7,7 +7,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::TryInto;
 
-type BagId = [u8; 32];
+pub type BagId = [u8; 32];
 
 pub struct Index<C: BitcoinClient> {
     client: C,
@@ -214,13 +214,7 @@ pub struct BitcoinMintOutputIndex {
 mod tests {
     use super::*;
     use crate::test_utils::*;
-    use bitcoin::blockdata::script;
-    use bitcoin::hashes::sha256d;
-    use bitcoin::hashes::Hash;
-    use bitcoin::{BlockHeader, TxOut};
-    use bitcoincore_rpc::bitcoincore_rpc_json::GetBlockchainInfoResult;
     use std::cell::RefCell;
-    use std::convert::Infallible;
     use std::rc::Rc;
 
     #[test]
@@ -290,7 +284,7 @@ mod tests {
             forked_block2.clone(),
         ];
 
-        let blocks = Rc::new(RefCell::new(vec![initial_block.clone()]));
+        let blocks = Rc::new(RefCell::new(initial_blocks));
         let client = TestBitcoinClient {
             blocks: blocks.clone(),
         };
