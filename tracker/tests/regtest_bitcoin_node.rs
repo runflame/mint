@@ -7,10 +7,12 @@ use std::process::{Child, Stdio};
 use std::str::FromStr;
 use std::time::Duration;
 use tracker::bitcoin_client::BitcoinMintExt;
+use tracker::storage::{IndexStorage, MemoryIndexStorage};
 use tracker::Index;
 
 const GENERATED_BLOCKS: u64 = 120;
 
+// TODO: kill bitcoind process after test
 #[test]
 fn test_new_blocks_with_mint_txs() {
     let (_dir, _child, client, address) = init_client();
@@ -19,17 +21,21 @@ fn test_new_blocks_with_mint_txs() {
     let tx_id = client.send_mint_transaction(10, &[1; 32]).unwrap();
     let mint_block = generate_block(&client, &address, &tx_id);
 
-    let mut index = Index::new(client, Some(119));
+    let storage = MemoryIndexStorage::new();
+    let mut index = Index::new(client, storage, Some(119));
     index.add_bag([1; 32]);
 
     index.check_last_blocks();
     assert_eq!(index.checked_height(), GENERATED_BLOCKS + 1);
 
-    let txs = index.get_index();
-    assert_eq!(txs.len(), 1); // we have only one mint transaction
+    let txs = index.get_storage();
+    assert_eq!(txs.get_blocks_count().unwrap(), 1); // we have only one mint transaction
 
-    let txs1 = txs.get(&mint_block).unwrap();
-    assert_eq!(txs1.last().unwrap().bag_id, [1; 32]);
+    let txs1 = txs
+        .get_blocks_by_hash(&mint_block)
+        .unwrap()
+        .collect::<Vec<_>>();
+    assert_eq!(txs1.last().unwrap().data.bag_id, [1; 32]);
 }
 
 fn init_client() -> (TempDir, Child, Client, Address) {

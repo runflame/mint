@@ -1,34 +1,33 @@
 use crate::bitcoin_client::BitcoinClient;
+use crate::storage::{IndexStorage, Record, RecordData};
 use bitcoin::blockdata::opcodes;
 use bitcoin::blockdata::script::Instruction;
 use bitcoin::{BlockHash, Transaction, TxOut, Txid};
 use bitcoincore_rpc::json::GetBlockHeaderResult;
 use std::cmp::Ordering;
-use std::collections::HashMap;
 use std::convert::TryInto;
 
 pub type BagId = [u8; 32];
 
-pub struct Index<C: BitcoinClient> {
+pub struct Index<C: BitcoinClient, S: IndexStorage> {
     client: C,
     height: u64,
     checked_chain: Vec<BlockHash>,
-    index: HashMap<BlockHash, Vec<BitcoinMintOutput>>,
+    storage: S,
     bags: Vec<BagId>,
 }
 
-impl<C: BitcoinClient> Index<C> {
-    pub fn new(client: C, base_height: Option<u64>) -> Self {
+impl<C: BitcoinClient, S: IndexStorage> Index<C, S> {
+    pub fn new(client: C, storage: S, base_height: Option<u64>) -> Self {
         let info = client.get_blockchain_info().unwrap();
         let height = base_height.unwrap_or(info.blocks);
         let checked_chain = Vec::new();
-        let index = HashMap::new();
         let bags = vec![];
         Index {
             client,
             height,
             checked_chain,
-            index,
+            storage,
             bags,
         }
     }
@@ -42,12 +41,12 @@ impl<C: BitcoinClient> Index<C> {
     }
 
     // TODO: better API for indexing
-    pub fn get_index(&self) -> &HashMap<BlockHash, Vec<BitcoinMintOutput>> {
-        &self.index
+    pub fn get_storage(&self) -> &S {
+        &self.storage
     }
 }
 
-impl<C: BitcoinClient> Index<C> {
+impl<C: BitcoinClient, S: IndexStorage> Index<C, S> {
     pub fn check_last_blocks(&mut self) {
         let new_blockchain_info = self.client.get_blockchain_info().unwrap();
         let new_height = new_blockchain_info.blocks;
@@ -73,9 +72,9 @@ impl<C: BitcoinClient> Index<C> {
 
     fn remove_blocks_when_fork(&mut self, reorg_info: ReorgInfo) -> u64 {
         for discarded_block in reorg_info.discarded_blocks.iter() {
-            self.index
-                .remove(discarded_block)
-                .expect("Discarded block hashes must be given from the index");
+            self.storage
+                .remove_with_block_hash(discarded_block)
+                .unwrap();
         }
         let fork_position_in_checked_chain =
             self.checked_chain.len() - reorg_info.discarded_blocks.len();
@@ -86,7 +85,7 @@ impl<C: BitcoinClient> Index<C> {
     fn add_blocks(&mut self, old_height: u64, new_height: u64) {
         for index in old_height + 1..new_height + 1 {
             let hash = self.client.get_block_hash(index).unwrap();
-            self.add_next_block_to_index(hash);
+            self.add_next_block_to_index(hash).unwrap();
         }
     }
 
@@ -112,43 +111,47 @@ impl<C: BitcoinClient> Index<C> {
         })
     }
 
-    fn add_next_block_to_index(&mut self, block_hash: BlockHash) {
+    fn add_next_block_to_index(&mut self, block_hash: BlockHash) -> Result<(), S::Err> {
         let transactions = self.check_bitcoin_block_with_hash(block_hash.clone());
-        if transactions.len() != 0 {
-            self.index.insert(block_hash, transactions);
-        }
+        transactions
+            .into_iter()
+            .map(|tx| self.storage.store_record(tx))
+            .collect::<Result<Vec<()>, S::Err>>()?;
         self.checked_chain.push(block_hash);
+        Ok(())
     }
 
-    fn check_bitcoin_block_with_hash(&self, hash: BlockHash) -> Vec<BitcoinMintOutput> {
+    fn check_bitcoin_block_with_hash(&self, hash: BlockHash) -> Vec<Record> {
         let block = self.client.get_block(&hash).unwrap();
         let txs = block.txdata;
 
         let mint_txs = txs
             .into_iter()
-            .filter_map(|tx| self.parse_mint_transaction(tx))
+            .filter_map(|tx| self.parse_mint_transaction(hash, tx))
             .collect();
 
         mint_txs
     }
 }
 
-impl<C: BitcoinClient> Index<C> {
-    fn parse_mint_transaction(&self, tx: Transaction) -> Option<BitcoinMintOutput> {
+impl<C: BitcoinClient, S: IndexStorage> Index<C, S> {
+    fn parse_mint_transaction(&self, block: BlockHash, tx: Transaction) -> Option<Record> {
         let txid = tx.txid();
         tx.output
             .iter()
             .enumerate()
-            .filter_map(|(out_pos, out)| self.parse_mint_output(txid, out_pos as u64, out))
+            .filter_map(|(out_pos, out)| {
+                self.parse_mint_output(out).map(|data| Record {
+                    bitcoin_block: block,
+                    bitcoin_tx_id: txid.clone(),
+                    bitcoin_output_position: out_pos as u64,
+                    data,
+                })
+            })
             .next()
     }
 
-    fn parse_mint_output(
-        &self,
-        txid: Txid,
-        out_pos: u64,
-        out: &TxOut,
-    ) -> Option<BitcoinMintOutput> {
+    fn parse_mint_output(&self, out: &TxOut) -> Option<RecordData> {
         let mut instructions = out.script_pubkey.instructions();
 
         let first_instruction = instructions.next().and_then(|res| res.ok())?;
@@ -161,14 +164,7 @@ impl<C: BitcoinClient> Index<C> {
             return None;
         }
         let amount = out.value;
-        Some(BitcoinMintOutput {
-            index: BitcoinMintOutputIndex {
-                txid,
-                output_position: out_pos,
-            },
-            amount,
-            bag_id,
-        })
+        Some(RecordData { bag_id, amount })
     }
 }
 
@@ -213,11 +209,12 @@ pub struct BitcoinMintOutputIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::MemoryIndexStorage;
     use crate::test_utils::*;
     use std::cell::RefCell;
     use std::rc::Rc;
 
-    impl<C: BitcoinClient> Index<C> {
+    impl<C: BitcoinClient, S: IndexStorage> Index<C, S> {
         fn tip(&self) -> BlockHash {
             self.checked_chain.last().unwrap().clone()
         }
@@ -232,7 +229,8 @@ mod tests {
         let client = TestBitcoinClient {
             blocks: blocks.clone(),
         };
-        let mut index = Index::new(client, None);
+        let storage = MemoryIndexStorage::new();
+        let mut index = Index::new(client, storage, None);
 
         assert_eq!(index.height, 0);
         assert_eq!(index.checked_chain, vec![]);
@@ -243,7 +241,7 @@ mod tests {
         assert_eq!(index.height, 1);
         assert_eq!(index.checked_chain, vec![block2.block_hash.clone()]);
         assert_eq!(index.tip(), block2.block_hash.clone());
-        assert_eq!(index.index.len(), 0);
+        assert_eq!(index.storage.get_blocks_count().unwrap(), 0);
     }
 
     #[test]
@@ -255,20 +253,25 @@ mod tests {
         let client = TestBitcoinClient {
             blocks: blocks.clone(),
         };
-        let mut index = Index::new(client, None);
+        let storage = MemoryIndexStorage::new();
+        let mut index = Index::new(client, storage, None);
 
         index.add_bag([1; 32]);
 
         blocks.borrow_mut().push(block2.clone());
         index.check_last_blocks();
 
-        assert_eq!(index.index.len(), 1);
+        assert_eq!(index.storage.get_blocks_count().unwrap(), 1);
 
-        let txs_in_index = index.index.get(&block2.block_hash).unwrap();
+        let txs_in_index = index
+            .storage
+            .get_blocks_by_hash(&block2.block_hash)
+            .unwrap()
+            .collect::<Vec<_>>();
         let block2_tx_out = &txs_in_index[0];
 
-        assert_eq!(block2_tx_out.amount, 10);
-        assert_eq!(block2_tx_out.bag_id, [1; 32]);
+        assert_eq!(block2_tx_out.data.amount, 10);
+        assert_eq!(block2_tx_out.data.bag_id, [1; 32]);
     }
 
     #[test]
@@ -294,7 +297,8 @@ mod tests {
         let client = TestBitcoinClient {
             blocks: blocks.clone(),
         };
-        let mut index = Index::new(client, None);
+        let storage = MemoryIndexStorage::new();
+        let mut index = Index::new(client, storage, None);
 
         index.add_bag([1; 32]);
         index.add_bag([2; 32]);
@@ -303,19 +307,27 @@ mod tests {
         *blocks.borrow_mut() = blocks_chain_1;
         index.check_last_blocks();
 
-        assert_eq!(index.index.len(), 1);
+        assert_eq!(index.storage.get_blocks_count().unwrap(), 1);
 
         *blocks.borrow_mut() = blocks_chain_2;
         index.check_last_blocks();
 
-        assert_eq!(index.index.len(), 2);
+        assert_eq!(index.storage.get_blocks_count().unwrap(), 2);
 
-        let txs_in_index = index.index.get(&forked_block.block_hash).unwrap();
+        let txs_in_index = index
+            .storage
+            .get_blocks_by_hash(&forked_block.block_hash)
+            .unwrap()
+            .collect::<Vec<_>>();
         let forked_block_tx_out = &txs_in_index[0];
-        assert_eq!(forked_block_tx_out.bag_id, [2; 32]);
+        assert_eq!(forked_block_tx_out.data.bag_id, [2; 32]);
 
-        let txs_in_index = index.index.get(&forked_block2.block_hash).unwrap();
+        let txs_in_index = index
+            .storage
+            .get_blocks_by_hash(&forked_block2.block_hash)
+            .unwrap()
+            .collect::<Vec<_>>();
         let forked_block2_tx_out = &txs_in_index[0];
-        assert_eq!(forked_block2_tx_out.bag_id, [3; 32]);
+        assert_eq!(forked_block2_tx_out.data.bag_id, [3; 32]);
     }
 }
