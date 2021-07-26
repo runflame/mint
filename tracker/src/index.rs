@@ -41,6 +41,13 @@ impl<C: BitcoinClient> Index<C> {
         self.bags.push(bag);
     }
 
+    // TODO: better API for indexing
+    pub fn get_index(&self) -> &HashMap<BlockHash, Vec<BitcoinMintOutput>> {
+        &self.index
+    }
+}
+
+impl<C: BitcoinClient> Index<C> {
     pub fn check_last_blocks(&mut self) {
         let new_blockchain_info = self.client.get_blockchain_info().unwrap();
         let new_height = new_blockchain_info.blocks;
@@ -51,10 +58,6 @@ impl<C: BitcoinClient> Index<C> {
             }
             Ordering::Less => self.check_blocks(new_height),
         }
-    }
-
-    pub fn get_index(&self) -> &HashMap<BlockHash, Vec<BitcoinMintOutput>> {
-        &self.index
     }
 
     fn check_blocks(&mut self, new_height: u64) {
@@ -128,12 +131,9 @@ impl<C: BitcoinClient> Index<C> {
 
         mint_txs
     }
+}
 
-    #[cfg(test)]
-    fn tip(&self) -> BlockHash {
-        self.checked_chain.last().unwrap().clone()
-    }
-
+impl<C: BitcoinClient> Index<C> {
     fn parse_mint_transaction(&self, tx: Transaction) -> Option<BitcoinMintOutput> {
         let txid = tx.txid();
         tx.output
@@ -206,8 +206,8 @@ pub struct BitcoinMintOutput {
 
 #[derive(Debug)]
 pub struct BitcoinMintOutputIndex {
-    txid: Txid,
-    output_position: u64,
+    pub txid: Txid,
+    pub output_position: u64,
 }
 
 #[cfg(test)]
@@ -216,6 +216,12 @@ mod tests {
     use crate::test_utils::*;
     use std::cell::RefCell;
     use std::rc::Rc;
+
+    impl<C: BitcoinClient> Index<C> {
+        fn tip(&self) -> BlockHash {
+            self.checked_chain.last().unwrap().clone()
+        }
+    }
 
     #[test]
     fn test_new_blocks() {

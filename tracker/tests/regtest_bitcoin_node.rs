@@ -87,6 +87,7 @@ impl Drop for TempDir {
     }
 }
 
+// TODO: remove when https://github.com/rust-bitcoin/rust-bitcoincore-rpc/pull/189 is accepted
 fn generate_block(client: &Client, address: &Address, tx_id: &Txid) -> BlockHash {
     let value: Value = client
         .call(
