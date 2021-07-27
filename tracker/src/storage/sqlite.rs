@@ -77,14 +77,16 @@ impl IndexStorage for SqliteIndexStorage {
             .query_row("SELECT COUNT(*) FROM records;", [], |row| row.get(0))
     }
 
-    fn remove_with_block_hash(&self, _hash: &BlockHash) -> Result<(), Self::Err> {
-        unimplemented!()
+    fn remove_with_block_hash(&self, hash: &BlockHash) -> Result<(), Self::Err> {
+        self.connection
+            .execute("DELETE FROM records WHERE block = ?1;", [hash.as_ref()])?;
+        Ok(())
     }
 
     fn get_blocks_by_hash(&self, hash: &BlockHash) -> Result<Vec<Record>, Self::Err> {
-        let mut stmt = self
-            .connection
-            .prepare("SELECT block, txid, out_pos, bag_id, amount FROM records WHERE block = ?1")?;
+        let mut stmt = self.connection.prepare(
+            "SELECT block, txid, out_pos, bag_id, amount FROM records WHERE block = ?1;",
+        )?;
 
         let res = stmt.query_map([hash.as_ref()], |row| {
             Ok(Record {
@@ -124,11 +126,13 @@ mod tests {
         let record = dummy_record([1; 32], [2; 32], 4, [3; 32], 5);
 
         store.store_record(record.clone()).unwrap();
-
         assert_eq!(store.get_blocks_count().unwrap(), 1);
 
         let records = store.get_blocks_by_hash(&record.bitcoin_block).unwrap();
         assert_eq!(records, vec![record.clone()]);
+
+        store.remove_with_block_hash(&record.bitcoin_block).unwrap();
+        assert_eq!(store.get_blocks_count().unwrap(), 0);
     }
 
     fn dummy_record(
