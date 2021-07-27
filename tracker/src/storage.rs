@@ -1,5 +1,5 @@
 #[cfg(feature = "sqlite-storage")]
-mod sqlite;
+pub mod sqlite;
 
 use crate::index::BagId;
 use bitcoin::{BlockHash, Txid};
