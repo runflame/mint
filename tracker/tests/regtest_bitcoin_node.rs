@@ -7,8 +7,9 @@ use std::process::{Child, Stdio};
 use std::str::FromStr;
 use std::time::Duration;
 use tracker::bitcoin_client::BitcoinMintExt;
+use tracker::storage::memory::MemoryIndexStorage;
 use tracker::storage::sqlite::SqliteIndexStorage;
-use tracker::storage::{IndexStorage, MemoryIndexStorage};
+use tracker::storage::IndexStorage;
 use tracker::Index;
 
 const GENERATED_BLOCKS: u64 = 120;

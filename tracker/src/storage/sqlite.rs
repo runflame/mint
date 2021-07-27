@@ -1,4 +1,5 @@
-use crate::storage::{IndexStorage, Record, RecordData};
+use crate::record::{Record, RecordData};
+use crate::storage::IndexStorage;
 use bitcoin::hashes::Hash;
 use bitcoin::BlockHash;
 use bitcoin::Txid;
@@ -103,7 +104,7 @@ impl IndexStorage for SqliteIndexStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::RecordData;
+    use crate::record::RecordData;
     use bitcoin::Txid;
 
     #[test]

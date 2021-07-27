@@ -1,5 +1,6 @@
 use crate::bitcoin_client::BitcoinClient;
-use crate::storage::{IndexStorage, Record, RecordData};
+use crate::record::{Record, RecordData};
+use crate::storage::IndexStorage;
 use bitcoin::blockdata::opcodes;
 use bitcoin::blockdata::script::Instruction;
 use bitcoin::{BlockHash, Transaction, TxOut, Txid};
@@ -209,7 +210,7 @@ pub struct BitcoinMintOutputIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::MemoryIndexStorage;
+    use crate::storage::memory::MemoryIndexStorage;
     use crate::test_utils::*;
     use std::cell::RefCell;
     use std::rc::Rc;
