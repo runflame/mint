@@ -2,8 +2,7 @@ use crate::storage::{IndexStorage, Record, RecordData};
 use bitcoin::hashes::Hash;
 use bitcoin::BlockHash;
 use bitcoin::Txid;
-use rusqlite::blob::ZeroBlob;
-use rusqlite::{Connection, DatabaseName};
+use rusqlite::Connection;
 use std::convert::TryFrom;
 use std::path::Path;
 
@@ -41,14 +40,6 @@ impl SqliteIndexStorage {
             )
             .unwrap();
     }
-
-    fn write_blob(&self, column: &str, row_id: i64, data: &[u8]) -> Result<(), rusqlite::Error> {
-        let mut blob =
-            self.connection
-                .blob_open(DatabaseName::Main, "records", column, row_id, false)?;
-        blob.write_at(data, 0)?;
-        Ok(())
-    }
 }
 
 impl IndexStorage for SqliteIndexStorage {
@@ -58,17 +49,13 @@ impl IndexStorage for SqliteIndexStorage {
         self.connection.execute(
             "INSERT INTO records VALUES (?1, ?2, ?3, ?4, ?5);",
             rusqlite::params![
-                ZeroBlob(32),
-                ZeroBlob(32),
+                record.bitcoin_block.as_ref(),
+                record.bitcoin_tx_id.as_ref(),
                 record.bitcoin_output_position,
-                ZeroBlob(32),
+                &record.data.bag_id as &[_],
                 record.data.amount
             ],
         )?;
-        let rowid = self.connection.last_insert_rowid();
-        self.write_blob("block", rowid, record.bitcoin_block.as_ref())?;
-        self.write_blob("txid", rowid, record.bitcoin_tx_id.as_ref())?;
-        self.write_blob("bag_id", rowid, &record.data.bag_id)?;
         Ok(())
     }
 
