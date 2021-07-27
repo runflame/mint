@@ -7,21 +7,34 @@ use std::process::{Child, Stdio};
 use std::str::FromStr;
 use std::time::Duration;
 use tracker::bitcoin_client::BitcoinMintExt;
+use tracker::storage::sqlite::SqliteIndexStorage;
 use tracker::storage::{IndexStorage, MemoryIndexStorage};
 use tracker::Index;
 
 const GENERATED_BLOCKS: u64 = 120;
 
-// TODO: kill bitcoind process after test
 #[test]
-fn test_new_blocks_with_mint_txs() {
-    let (_dir, _child, client, address) = init_client();
+fn regtest_bitcoin_node_memory_storage() {
+    test_new_blocks_with_mint_txs(MemoryIndexStorage::new(), "/tmp/test_memory_storage/", 0);
+}
+
+#[test]
+fn regtest_bitcoin_node_sqlite_storage() {
+    test_new_blocks_with_mint_txs(
+        SqliteIndexStorage::in_memory(),
+        "/tmp/test_sqlite_storage/",
+        1,
+    );
+}
+
+// TODO: kill bitcoind process after test
+fn test_new_blocks_with_mint_txs<S: IndexStorage>(storage: S, dir: &str, offset: u32) {
+    let (_dir, _child, client, address) = init_client(dir, offset);
 
     // create mint transaction
     let tx_id = client.send_mint_transaction(10, &[1; 32]).unwrap();
     let mint_block = generate_block(&client, &address, &tx_id);
 
-    let storage = MemoryIndexStorage::new();
     let mut index = Index::new(client, storage, Some(119));
     index.add_bag([1; 32]);
 
@@ -31,20 +44,17 @@ fn test_new_blocks_with_mint_txs() {
     let txs = index.get_storage();
     assert_eq!(txs.get_blocks_count().unwrap(), 1); // we have only one mint transaction
 
-    let txs1 = txs
-        .get_blocks_by_hash(&mint_block)
-        .unwrap()
-        .collect::<Vec<_>>();
+    let txs1 = txs.get_blocks_by_hash(&mint_block).unwrap();
     assert_eq!(txs1.last().unwrap().data.bag_id, [1; 32]);
 }
 
-fn init_client() -> (TempDir, Child, Client, Address) {
-    const DIR: &'static str = "/tmp/bitcoin_test_node";
-    let dir = TempDir::new(DIR.to_string());
-    let node = setup_bitcoin_node(18444, 12001, DIR);
+fn init_client(path: &str, offset: u32) -> (TempDir, Child, Client, Address) {
+    let rpc_port = 12001 + offset;
+    let dir = TempDir::new(path.to_string());
+    let node = setup_bitcoin_node(18444 + offset, rpc_port, path);
     std::thread::sleep(Duration::from_secs(1)); // Wait while node will started
     let client = Client::new(
-        "http://localhost:12001".to_string(),
+        format!("http://localhost:{}", rpc_port),
         Auth::UserPass("rt".to_string(), "rt".to_string()),
     )
     .unwrap();
