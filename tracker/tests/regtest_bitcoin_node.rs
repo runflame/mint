@@ -39,8 +39,8 @@ fn test_new_blocks_with_mint_txs<S: IndexStorage>(storage: S, dir: &str, offset:
     let mut index = Index::new(client, storage, Some(119));
     index.add_bag([1; 32]);
 
-    index.check_last_blocks();
-    assert_eq!(index.checked_height(), GENERATED_BLOCKS + 1);
+    index.check_last_btc_blocks();
+    assert_eq!(index.checked_btc_height(), GENERATED_BLOCKS + 1);
 
     let txs = index.get_storage();
     assert_eq!(txs.get_blocks_count().unwrap(), 1); // we have only one mint transaction
