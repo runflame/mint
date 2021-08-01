@@ -3,7 +3,7 @@ use crate::record::{Record, RecordData};
 use crate::storage::IndexStorage;
 use bitcoin::blockdata::opcodes;
 use bitcoin::blockdata::script::Instruction;
-use bitcoin::{BlockHash, Transaction, TxOut, Txid};
+use bitcoin::{BlockHash, Transaction, TxOut};
 use bitcoincore_rpc::json::GetBlockHeaderResult;
 use std::cmp::Ordering;
 use std::convert::TryInto;
@@ -197,19 +197,6 @@ fn is_block_in_main_chain(block: &GetBlockHeaderResult) -> bool {
 struct ReorgInfo {
     height_when_fork: u64,
     discarded_blocks: Vec<BlockHash>,
-}
-
-#[derive(Debug)]
-pub struct BitcoinMintOutput {
-    pub index: BitcoinMintOutputIndex,
-    pub amount: u64,
-    pub bag_id: BagId,
-}
-
-#[derive(Debug)]
-pub struct BitcoinMintOutputIndex {
-    pub txid: Txid,
-    pub output_position: u64,
 }
 
 #[cfg(test)]
