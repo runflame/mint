@@ -48,7 +48,7 @@ fn test_new_blocks_with_mint_txs<S: IndexStorage>(storage: S, dir: &str, offset:
     let txs = index.get_storage();
     assert_eq!(txs.get_blocks_count().unwrap(), 1); // we have only one mint transaction
 
-    let txs1 = txs.get_blocks_by_hash(&mint_block).unwrap();
+    let txs1 = txs.get_records_by_block_hash(&mint_block).unwrap();
     assert_eq!(txs1.last().unwrap().data.bag_id, [1; 32]);
 }
 

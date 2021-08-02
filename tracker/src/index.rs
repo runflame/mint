@@ -269,7 +269,7 @@ mod tests {
 
         let txs_in_index = index
             .storage
-            .get_blocks_by_hash(&block2.block_hash)
+            .get_records_by_block_hash(&block2.block_hash)
             .unwrap();
         let block2_tx_out = &txs_in_index[0];
 
@@ -297,7 +297,7 @@ mod tests {
 
         let mut txs_in_index = index
             .storage
-            .get_blocks_by_hash(&block2.block_hash)
+            .get_records_by_block_hash(&block2.block_hash)
             .unwrap();
         txs_in_index.sort_by(|x, y| x.data.bag_id.cmp(&y.data.bag_id));
 
@@ -322,7 +322,7 @@ mod tests {
 
         let txs_in_index = index
             .storage
-            .get_blocks_by_hash(&block2.block_hash)
+            .get_records_by_block_hash(&block2.block_hash)
             .unwrap();
 
         assert_eq!(txs_in_index.len(), 1);
@@ -377,14 +377,14 @@ mod tests {
 
         let txs_in_index = index
             .storage
-            .get_blocks_by_hash(&forked_block.block_hash)
+            .get_records_by_block_hash(&forked_block.block_hash)
             .unwrap();
         let forked_block_tx_out = &txs_in_index[0];
         assert_eq!(forked_block_tx_out.data.bag_id, [2; 32]);
 
         let txs_in_index = index
             .storage
-            .get_blocks_by_hash(&forked_block2.block_hash)
+            .get_records_by_block_hash(&forked_block2.block_hash)
             .unwrap();
         let forked_block2_tx_out = &txs_in_index[0];
         assert_eq!(forked_block2_tx_out.data.bag_id, [3; 32]);

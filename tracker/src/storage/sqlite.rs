@@ -71,7 +71,7 @@ impl IndexStorage for SqliteIndexStorage {
         Ok(())
     }
 
-    fn get_blocks_by_hash(&self, hash: &BlockHash) -> Result<Vec<Record>, Self::Err> {
+    fn get_records_by_block_hash(&self, hash: &BlockHash) -> Result<Vec<Record>, Self::Err> {
         let mut stmt = self.connection.prepare(
             "SELECT block, txid, out_pos, bag_id, amount FROM records WHERE block = ?1;",
         )?;
@@ -122,7 +122,7 @@ mod tests {
         store.store_record(record.clone()).unwrap();
         assert_eq!(store.get_blocks_count().unwrap(), 1);
 
-        let records = store.get_blocks_by_hash(&record.bitcoin_block).unwrap();
+        let records = store.get_records_by_block_hash(&record.bitcoin_block).unwrap();
         assert_eq!(records, vec![record.clone()]);
 
         store.remove_with_block_hash(&record.bitcoin_block).unwrap();

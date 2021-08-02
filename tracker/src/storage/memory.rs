@@ -33,7 +33,7 @@ impl IndexStorage for MemoryIndexStorage {
         Ok(())
     }
 
-    fn get_blocks_by_hash(&self, hash: &BlockHash) -> Result<Vec<Record>, Self::Err> {
+    fn get_records_by_block_hash(&self, hash: &BlockHash) -> Result<Vec<Record>, Self::Err> {
         let this = self.0.borrow();
         let records = this.get(hash).map(Clone::clone).unwrap();
         Ok(records)
