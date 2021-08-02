@@ -37,9 +37,12 @@ fn test_new_blocks_with_mint_txs<S: IndexStorage>(storage: S, dir: &str, offset:
     let mint_block = generate_block(&client, &address, &tx_id);
 
     let mut index = Index::new(client, storage, Some(119));
-    index.add_bag([1; 32]);
 
     index.check_last_btc_blocks();
+
+    index.add_bag([1; 32]);
+    index.validate_bags().unwrap();
+
     assert_eq!(index.checked_btc_height(), GENERATED_BLOCKS + 1);
 
     let txs = index.get_storage();

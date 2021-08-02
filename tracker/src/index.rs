@@ -6,6 +6,7 @@ use bitcoin::blockdata::script::Instruction;
 use bitcoin::{BlockHash, Transaction, TxOut};
 use bitcoincore_rpc::json::GetBlockHeaderResult;
 use std::cmp::Ordering;
+use std::collections::HashSet;
 use std::convert::TryInto;
 
 pub type BagId = [u8; 32];
@@ -15,7 +16,9 @@ pub struct Index<C: BitcoinClient, S: IndexStorage> {
     btc_height: u64,
     btc_checked_chain: Vec<BlockHash>,
     storage: S,
+    // TODO: store bags in a storage or don't store bags in the struct
     bags: Vec<BagId>,
+    bags_in_last_block: HashSet<BagId>,
 }
 
 impl<C: BitcoinClient, S: IndexStorage> Index<C, S> {
@@ -24,12 +27,14 @@ impl<C: BitcoinClient, S: IndexStorage> Index<C, S> {
         let height = base_height.unwrap_or(info.blocks);
         let checked_chain = Vec::new();
         let bags = vec![];
+        let bags_in_last_block = HashSet::new();
         Index {
             btc_client: client,
             btc_height: height,
             btc_checked_chain: checked_chain,
             storage,
             bags,
+            bags_in_last_block,
         }
     }
 
@@ -44,6 +49,18 @@ impl<C: BitcoinClient, S: IndexStorage> Index<C, S> {
     // TODO: better API for indexing
     pub fn get_storage(&self) -> &S {
         &self.storage
+    }
+}
+
+impl<C: BitcoinClient, S: IndexStorage> Index<C, S> {
+    pub fn validate_bags(&mut self) -> Result<(), S::Err> {
+        self.bags_in_last_block
+            .iter()
+            .filter(|&bag| !self.bags.contains(bag))
+            .map(|bag| self.storage.remove_records_with_bag(bag))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(())
     }
 }
 
@@ -115,6 +132,9 @@ impl<C: BitcoinClient, S: IndexStorage> Index<C, S> {
 
     fn add_btc_block_to_index(&mut self, block_hash: BlockHash) -> Result<(), S::Err> {
         let transactions = self.check_btc_block_with_hash(block_hash.clone());
+        transactions.iter().for_each(|tx| {
+            self.bags_in_last_block.insert(tx.data.bag_id.clone());
+        });
         transactions
             .into_iter()
             .map(|tx| self.storage.store_record(tx))
@@ -129,49 +149,40 @@ impl<C: BitcoinClient, S: IndexStorage> Index<C, S> {
 
         let mint_txs = txs
             .into_iter()
-            .filter_map(|tx| self.parse_mint_transaction_btc_block(hash, tx))
+            .filter_map(|tx| parse_mint_transaction_btc_block(hash, tx))
             .collect();
 
         mint_txs
     }
 }
 
-impl<C: BitcoinClient, S: IndexStorage> Index<C, S> {
-    fn parse_mint_transaction_btc_block(
-        &self,
-        block: BlockHash,
-        tx: Transaction,
-    ) -> Option<Record> {
-        let txid = tx.txid();
-        tx.output
-            .iter()
-            .enumerate()
-            .filter_map(|(out_pos, out)| {
-                self.parse_mint_btc_output(out).map(|data| Record {
-                    bitcoin_block: block,
-                    bitcoin_tx_id: txid.clone(),
-                    bitcoin_output_position: out_pos as u64,
-                    data,
-                })
+fn parse_mint_transaction_btc_block(block: BlockHash, tx: Transaction) -> Option<Record> {
+    let txid = tx.txid();
+    tx.output
+        .iter()
+        .enumerate()
+        .filter_map(|(out_pos, out)| {
+            parse_mint_btc_output(out).map(|data| Record {
+                bitcoin_block: block,
+                bitcoin_tx_id: txid.clone(),
+                bitcoin_output_position: out_pos as u64,
+                data,
             })
-            .next()
-    }
+        })
+        .next()
+}
 
-    fn parse_mint_btc_output(&self, out: &TxOut) -> Option<RecordData> {
-        let mut instructions = out.script_pubkey.instructions();
+fn parse_mint_btc_output(out: &TxOut) -> Option<RecordData> {
+    let mut instructions = out.script_pubkey.instructions();
 
-        let first_instruction = instructions.next().and_then(|res| res.ok())?;
-        assert_instruction_return(first_instruction)?;
+    let first_instruction = instructions.next().and_then(|res| res.ok())?;
+    assert_instruction_return(first_instruction)?;
 
-        let push_bytes_instr = instructions.next().and_then(|res| res.ok())?;
-        let bag_id = parse_push_32_bytes(push_bytes_instr)?;
+    let push_bytes_instr = instructions.next().and_then(|res| res.ok())?;
+    let bag_id = parse_push_32_bytes(push_bytes_instr)?;
 
-        if !self.bags.iter().any(|bag| *bag == bag_id) {
-            return None;
-        }
-        let amount = out.value;
-        Some(RecordData { bag_id, amount })
-    }
+    let amount = out.value;
+    Some(RecordData { bag_id, amount })
 }
 
 fn assert_instruction_return(instr: Instruction) -> Option<()> {
@@ -264,6 +275,64 @@ mod tests {
 
         assert_eq!(block2_tx_out.data.amount, 10);
         assert_eq!(block2_tx_out.data.bag_id, [1; 32]);
+    }
+
+    #[test]
+    fn test_new_blocks_with_mint_txs_invalid_bags() {
+        let initial_block = create_test_block(0, [1]);
+        let mut block2 = create_test_block_with_mint_tx(1, [2], [1; 32]);
+        block2.txs.push(create_test_mint_transaction([2; 32]));
+
+        let blocks = Rc::new(RefCell::new(vec![initial_block.clone()]));
+        let client = TestBitcoinClient {
+            blocks: blocks.clone(),
+        };
+        let storage = MemoryIndexStorage::new();
+
+        let mut index = Index::new(client, storage, None);
+        blocks.borrow_mut().push(block2.clone());
+
+        index.check_last_btc_blocks();
+        assert_eq!(index.storage.get_blocks_count().unwrap(), 1);
+
+        let mut txs_in_index = index
+            .storage
+            .get_blocks_by_hash(&block2.block_hash)
+            .unwrap();
+        txs_in_index.sort_by(|x, y| x.data.bag_id.cmp(&y.data.bag_id));
+
+        assert_eq!(txs_in_index.len(), 2);
+        assert_eq!(
+            txs_in_index[0].data,
+            RecordData {
+                bag_id: [1; 32],
+                amount: 10
+            }
+        );
+        assert_eq!(
+            txs_in_index[1].data,
+            RecordData {
+                bag_id: [2; 32],
+                amount: 10
+            }
+        );
+
+        index.add_bag([1; 32]);
+        index.validate_bags().unwrap();
+
+        let txs_in_index = index
+            .storage
+            .get_blocks_by_hash(&block2.block_hash)
+            .unwrap();
+
+        assert_eq!(txs_in_index.len(), 1);
+        assert_eq!(
+            txs_in_index[0].data,
+            RecordData {
+                bag_id: [1; 32],
+                amount: 10
+            }
+        );
     }
 
     #[test]
