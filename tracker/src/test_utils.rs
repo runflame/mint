@@ -144,17 +144,21 @@ pub fn create_test_block_with_mint_tx(
         height,
         block_hash: BlockHash::from_hash(sha256d::Hash::hash(data.as_ref())),
         in_main_chain: true,
-        txs: vec![Transaction {
-            version: 0,
-            lock_time: 0,
-            input: vec![],
-            output: vec![TxOut {
-                value: 10,
-                script_pubkey: script::Builder::new()
-                    .push_opcode(opcodes::all::OP_RETURN)
-                    .push_slice(tx_data.as_ref())
-                    .into_script(),
-            }],
+        txs: vec![create_test_mint_transaction(tx_data)],
+    }
+}
+
+pub fn create_test_mint_transaction(tx_data: impl AsRef<[u8]>) -> Transaction {
+    Transaction {
+        version: 0,
+        lock_time: 0,
+        input: vec![],
+        output: vec![TxOut {
+            value: 10,
+            script_pubkey: script::Builder::new()
+                .push_opcode(opcodes::all::OP_RETURN)
+                .push_slice(tx_data.as_ref())
+                .into_script(),
         }],
     }
 }
