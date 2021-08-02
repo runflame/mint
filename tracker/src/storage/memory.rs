@@ -38,4 +38,31 @@ impl IndexStorage for MemoryIndexStorage {
         let records = this.get(hash).map(Clone::clone).unwrap();
         Ok(records)
     }
+
+    fn remove_records_with_bag(&self, bag: &[u8; 32]) -> Result<(), Self::Err> {
+        // MemoryIndexStorage is used only to debug so no need to worry about performance
+        let mut this = self.0.borrow_mut();
+
+        let mut keys_with_empty = vec![];
+
+        for (key, records) in this.iter_mut() {
+            let mut i = 0;
+            while i != records.len() {
+                if records[i].data.bag_id == *bag {
+                    records.remove(i);
+                } else {
+                    i += 1;
+                }
+            }
+            if records.len() == 0 {
+                keys_with_empty.push(key.clone());
+            }
+        }
+
+        keys_with_empty.into_iter().for_each(|key| {
+            this.remove(&key);
+        });
+
+        Ok(())
+    }
 }

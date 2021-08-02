@@ -99,6 +99,12 @@ impl IndexStorage for SqliteIndexStorage {
 
         res.and_then(|cursor| cursor.collect())
     }
+
+    fn remove_records_with_bag(&self, bag: &[u8; 32]) -> Result<(), Self::Err> {
+        self.connection
+            .execute("DELETE FROM records WHERE bag_id = ?1;", [bag as &[_]])?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -120,6 +126,11 @@ mod tests {
         assert_eq!(records, vec![record.clone()]);
 
         store.remove_with_block_hash(&record.bitcoin_block).unwrap();
+        assert_eq!(store.get_blocks_count().unwrap(), 0);
+
+        store.store_record(record.clone()).unwrap();
+        assert_eq!(store.get_blocks_count().unwrap(), 1);
+        store.remove_records_with_bag(&record.data.bag_id).unwrap();
         assert_eq!(store.get_blocks_count().unwrap(), 0);
     }
 
