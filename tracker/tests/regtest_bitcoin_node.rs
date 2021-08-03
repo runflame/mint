@@ -27,7 +27,6 @@ fn regtest_bitcoin_node_sqlite_storage() {
     );
 }
 
-// TODO: kill bitcoind process after test
 fn test_new_blocks_with_mint_txs<S: IndexStorage>(storage: S, dir: &str, offset: u32) {
     let (_dir, _child, client, address) = init_client(dir, offset);
 
