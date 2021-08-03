@@ -122,7 +122,9 @@ mod tests {
         store.store_record(record.clone()).unwrap();
         assert_eq!(store.get_blocks_count().unwrap(), 1);
 
-        let records = store.get_records_by_block_hash(&record.bitcoin_block).unwrap();
+        let records = store
+            .get_records_by_block_hash(&record.bitcoin_block)
+            .unwrap();
         assert_eq!(records, vec![record.clone()]);
 
         store.remove_with_block_hash(&record.bitcoin_block).unwrap();
