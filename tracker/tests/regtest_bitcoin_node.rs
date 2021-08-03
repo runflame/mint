@@ -3,7 +3,6 @@ use bitcoin::hashes::sha256d::Hash;
 use bitcoin::{Address, BlockHash, Txid};
 use bitcoincore_rpc::{Auth, Client, RpcApi};
 use serde_json::Value;
-use std::process::{Child, Stdio};
 use std::str::FromStr;
 use std::time::Duration;
 use tracker::bitcoin_client::BitcoinMintExt;
@@ -52,7 +51,7 @@ fn test_new_blocks_with_mint_txs<S: IndexStorage>(storage: S, dir: &str, offset:
     assert_eq!(txs1.last().unwrap().data.bag_id, [1; 32]);
 }
 
-fn init_client(path: &str, offset: u32) -> (TempDir, Child, Client, Address) {
+fn init_client(path: &str, offset: u32) -> (TempDir, KillBitcoind, Client, Address) {
     let rpc_port = 12001 + offset;
     let dir = TempDir::new(path.to_string());
     let node = setup_bitcoin_node(18444 + offset, rpc_port, path);
@@ -75,16 +74,16 @@ fn init_client(path: &str, offset: u32) -> (TempDir, Child, Client, Address) {
     (dir, node, client, address)
 }
 
-fn setup_bitcoin_node(port: u32, rpcport: u32, datadir: &str) -> Child {
-    let child = std::process::Command::new("bash")
+fn setup_bitcoin_node(port: u32, rpcport: u32, datadir: &str) -> KillBitcoind {
+    let output = std::process::Command::new("bash")
         .arg("./tests/setup_single_node.sh")
         .arg(port.to_string())
         .arg(rpcport.to_string())
         .arg(datadir)
-        .stdout(Stdio::null())
-        .spawn()
+        .output()
         .unwrap();
-    child
+    let id = String::from_utf8(output.stdout).unwrap().trim().to_string();
+    KillBitcoind { id }
 }
 
 pub struct TempDir {
@@ -128,4 +127,17 @@ fn generate_block(client: &Client, address: &Address, tx_id: &Txid) -> BlockHash
     };
 
     BlockHash::from_hash(Hash::from_str(&hash).unwrap())
+}
+
+struct KillBitcoind {
+    id: String,
+}
+
+impl Drop for KillBitcoind {
+    fn drop(&mut self) {
+        std::process::Command::new("kill")
+            .arg(&self.id)
+            .spawn()
+            .unwrap();
+    }
 }

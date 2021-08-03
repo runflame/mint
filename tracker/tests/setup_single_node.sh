@@ -20,4 +20,5 @@ function CreateDataDir {
 }
 CreateDataDir $D port=$PORT rpcport=$RPCPORT
 BARGS="-datadir=$D"
-$BITCOIND $BARGS -fallbackfee=0.0000001
+$BITCOIND $BARGS -fallbackfee=0.0000001 &> /dev/null &
+echo $!
