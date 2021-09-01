@@ -13,7 +13,10 @@
   * [Block](#block)
   * [Block ID](#block-id)
   * [Block size](#block-size)
-  
+  * [Transcript](#transcript)
+  * [Merkle binary tree](#merkle-binary-tree)
+* [Security](#security)
+
 
 ## Overview
 
@@ -83,7 +86,11 @@ T.append_u64le("bid_amount", bag.bid_amount)
 T.append("txroot", MerkleRoot(bag.txs))
 T.append("ext", bag.ext)
 bag_id = T.challenge_bytes("id")
+bag_id[0..1] = [0xf1, 0xae]
 ```
+
+Note the the first 2 bytes are set to the bytes `F1 AE` indicating the Flame mainnet.
+Testnet uses `F1 XX` prefix where the second byte `XX` indicates the version of the testnet.
 
 Tx root is defined as [Merkle root hash](zkvm-spec.md#merkle-binary-tree) of the sidechain transactions including the witness data.
 
@@ -211,7 +218,6 @@ For the purposes of this specification exact block size limit is unimportant.
 Instead we define an abstract function `size(height) -> bytes` that maps every block height to its maximum size in bytes.
 
 
-
 #### Transcript
 
 Transcript is an instance of the [Merlin](https://doc.dalek.rs/merlin/) construction,
@@ -242,7 +248,7 @@ Labeled instances of the transcript can be precomputed
 to reduce number of Keccak-f permutations to just one per challenge.
 
 
-### Merkle binary tree
+#### Merkle binary tree
 
 The construction of a merkle binary tree is based on the [RFC 6962 Section 2.1](https://tools.ietf.org/html/rfc6962#section-2.1)
 with hash function replaced with a [transcript](#transcript).
@@ -297,11 +303,11 @@ The algorithm for validating the block is the following:
 2. Check that block.height is +1 to the current tip.
 3. Check that block.prev points to the current tip.
 4. Check that bags are ordered primarily by BTC amount burned, secondarily by BitcoinTxID lexicographically (lowest hash first).
-5. For each commit in the list:
+5. For each bag in the list:
     1. Check that tx with `BitcoinTxID` exists in bitcoin main chain and its first output correctly commits to the sidechain ID and the bag ID.
     2. Check that tx locktime is expressed in block height and equals H0 + block.height.
     3. Check that bag.prev == block.prev and bag.height == block.height.
-    4. Check commit size to be less or equals the current [blocksize limit](#block-size).
+    4. Check bag size to be less or equals the current [blocksize limit](#block-size).
     5. Apply transactions, skipping duplicates from the previously processed commit within this block.
     6. Check block size to be less or equals the current [blocksize limit](#block-size).
     7. Fail the entire block if invalid tx is encountered (including double-spend attempt).
@@ -314,38 +320,74 @@ The algorithm for validating the block is the following:
 
 ### Consensus
 
-Due to double-spends and conflicting commits, there could be multiple valid sidechains.
+Due to double-spends and conflicting bags, there could be multiple valid sidechains.
 To resolve which one is the main one, the following consensus algorithm is proposed:
 
 1. Each chain has **total weight** as a sum of weights of each of its blocks. If a better chain appears, reorganization procedure is used to switch from the current chain to another one: blocks are rolled back one after another to the common block, and then another chain's blocks are applied per usual rules. If the new chain violates rules, it is banned and the reorganization is performed back to the valid chain.
-2. Each block's weight is a base-2 logarithm of the sum of each commit's **adjusted burn**.
-3. Each commit's adjusted burn is amount of satoshis burned, **halved N times for N bitcoin blocks delay** comparing to the target block height (sidechain block height + H0). In other words, commit being "late" by N bitcoin blocks has its BTC value divided by 2^N for the purposes of weight calculation.
+2. Each block's weight is a base-2 logarithm of the sum of each bag's **adjusted burn**.
+3. Each bid's adjusted burn is amount of satoshis burned, **halved N times for N bitcoin blocks delay** comparing to the target block height (sidechain block height + H0). In other words, bid being "late" by N bitcoin blocks has its BTC value divided by 2^N for the purposes of weight calculation.
 
 **Note 1.** Because of the adjustment due to position in bitcoin chain, total weight may change as Bitcoin reorgs happen and transactions become more concentrated or spread out. This may affect the choice of the main sidechain and cause its reorganzation. In other words, Bitcoin miners are capable of affecting the finality of sidechain transactions: after all, sidechain relies on Bitcoin for its security.
 
-**Note 2.** Position-dependent weight calculation does not affect [block reward distribution](#block-reward). This is intentional so that reward allocations are stable across Bitcoin reorganizations.
+**Note 2.** Position-dependent weight calculation does not affect [block reward distribution](#reward). This is intentional so that reward allocations are stable across Bitcoin reorganizations.
 
 **Note 3.** Defining total weight as sum of logarithms of adjusted burns helps with fighting long-range attacks. Logarithm is monotonic and locally linear, so real-time conflicts are not amplified, but over the long term makes it exponentially expensive to produce a fork. For instance, making a fork N blocks late requires 2^N amount of capital.
 
 ### Minter
 
-By analogy with _miners_, minters are nodes in the network that [mint](#minting) [sidecoins](#sidecoin) by publishing [commits](#commit).
+By analogy with _miners_, minters are nodes in the network that [mint](#minting) [sidecoins](#sidecoin) by publishing [bids](#bid).
 
 ### Minting
 
-A process of performing [commits](#commit) that mint [sidecoins](#sidecoin). By analogy with bitcoin _mining_.
+A process of performing [bids](#bid) that mint [sidecoins](#sidecoin). By analogy with bitcoin _mining_.
 
-1. First, receive the latest BTC block.
-2. Second, wait to receive all available commits (bags) in this block over the sidechain p2p network.
-3. Choose the maximum-weight combination of commits that fit under the block limit, which defines the previous block.
+1. First, receive the latest BTC block and all available [bags](#bag) in the sidechain network.
+2. Second, wait to receive all available [bids](#bid) in this block over the sidechain p2p network.
+3. Choose the maximum-weight combination of bids that fit under the block limit, which defines the previous block.
 4. Apply that block to the current state, removing conflicting and duplicate txs from the mempool.
-5. Prepare a bag with an under-the-limit subset of most-paying txs from mempool and a reference to the previous block ID as computed speculatively from the known commits.
-6. Create a "commit transaction" with next block's timelock and the bag ID in the output script.
+5. Prepare a bag with an under-the-limit subset of most-paying txs from mempool and a reference to the previous block ID as computed speculatively from the known bids.
+6. Create a "bid transaction" with next block's timelock and the bag ID in the output script.
 7. Broadcast the transaction ASAP so it gets mined in the next block.
 
 
-### Tx
 
-A sidechain transaction.
+
+
+
+
+### Security
+
+TODO: how does greedy selection of bags work? What if one user withhelds his bag, so they make the next bag link to the different and higher-value prevblock, so it's incompatible with everyone else?
+
+                        block 1      block 2
+    honest players:     N1 btc       N2
+            weight:     log2(N1)     log2(N2) ...
+
+    dishonest player:   N1+A1 btc    A2
+            weight:     log2(N1+A1)  log2(A2) ...
+
+Honest weight for K blocks:   
+    
+    \sum_{ log2(N_i) }  i = 1 ... k
+
+Dishonest weight of K blocks: (changing N1+A1 for N1*(1 + f1) where f1 is capital share of the attacker
+
+    log2(N1*(1+f1)) == log2(N1) + log2(1+f1)
+    A2 => N2*f2, etc.
+    
+    
+    log2(1+f1) + \sum_{ log2(f_j) } + \sum_{ log2(N_i) }
+
+      ( > 0 )          ( < 0 if f_j < 1.0)  <- unless there's a 51% attack, each block diminishes the value of the initial advantage.
+
+So let's say we want to have one-block reorg: at block 1 we withhold a bag and for block 2 create a new bag that's 
+               
+    
+
+
+
+
+
+
 
 
