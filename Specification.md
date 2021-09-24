@@ -38,16 +38,11 @@ Individual minters compose [bags](#bag) and commit to them by making [bids](#bid
 
 #### Bid
 
-A bitcoin transaction output that destroys some number of coins with an unspendable script, that commits to a [bag ID](#bag-id).
+A bitcoin transaction output that destroys some number of coins, that commits to a [bag ID](#bag-id).
 
-Output script consists of `RETURN` instruction followed by `PUSHDATA` instruction with a 32-byte bag identifier. 
-
-```
-RETURN <32-byte Bag ID>
-```
+Destination address for transaction must be set to [bag ID](#bag-id).
 
 Bid transaction **lock time** is set to the bag’s height expressed in **blocks**.
-
 
 #### Bag
 
@@ -55,10 +50,11 @@ A set of [sidechain transactions](#transaction) selected as a sidechain block ca
 
 One or more bags are used to construct a [sidechain block](#block).
 
+TBD: a bag cannot contain information about a bid because the bid must contain bag id, so it produces an interdependence.
 ```
 struct Bag {
     height: u64,             // height of the new block
-    prev: BlockID,           // hash of the previous block
+    ancestors: Vec<BagID>,   // hashes of the ancestors bags
     timestamp_ms: u64,       // bag timestamp
     reward_address: Address, // sidechain predicate that receives the sidechain reward
     bid_tx: BitcoinTxID,     // bitcoin tx id that bids on this bag
@@ -69,6 +65,32 @@ struct Bag {
 }
 ```
 
+##### Height
+
+Each bag is identified by the block height to which it belongs. Sidechain blocks have the same height as their corresponding bitcoin blocks, 
+although in practice their [bids](#bid) may be shifted due to delays or reorgs.
+
+The first sidechain block contains no transactions, empty state and has height `...` (TBD).
+
+In this specification height will be labeled as `H`. Note like `H-M` should be read as _the height of the bag located M below_.
+
+##### Compatibility of bags
+
+Bags are called compatible if:
+1. They have the same height.
+2. They have the same set of ancestors from height (H-1) to height (H-M), where M is maturation period.
+3. Their transactions do not contain double spends.
+
+##### Ancestors
+
+Each bag has ancestors - a set of bags for which the bag is a child in the chain. An ancestor must have a height strictly less than a child height. Ancestors can be connected directly by adding them to field `Bag.ancestors` and also indirectly. Ancestor is indirectly connected if it is not contained in the `Bag.ansectors`.
+
+Ancestor `H-M` must be read as an _ancestor located at the height H-M_. Ancestors `H-M..H-K` must be read as _a set of ancestors located from height H-M to height H-K_, where each ancestor can be not connected directly, but from another ancestor.
+
+Each ancestor H-K for bag B must fulfill the following rules:
+1. Ancestors H-K-1..H-M should be the same for the ancestor H-K and for other ancestors connected to the bag B.
+
+
 #### Bag ID
 
 Bag ID is a hash of the contents of the [bag](#bag).
@@ -78,7 +100,7 @@ Defined via a [transcript](#transcript):
 ```
 T = Transcript("Flame.Bag")
 T.append_u64le("height", bag.height)
-T.append("prev", bag.previous_block_id)
+// TBD: add ancestors to the transcript.
 T.append("address", bag.reward_address)
 T.append("bid_tx", bag.bid_tx)
 T.append_u64le("bid_output", bag.bid_output)
@@ -89,18 +111,10 @@ bag_id = T.challenge_bytes("id")
 bag_id[0..1] = [0xf1, 0xae]
 ```
 
-Note the the first 2 bytes are set to the bytes `F1 AE` indicating the Flame mainnet.
+Note that the first 2 bytes are set to the bytes `F1 AE` indicating the Flame mainnet.
 Testnet uses `F1 XX` prefix where the second byte `XX` indicates the version of the testnet.
 
 Tx root is defined as [Merkle root hash](zkvm-spec.md#merkle-binary-tree) of the sidechain transactions including the witness data.
-
-
-#### Height
-
-Each bag is identified by the block height to which it belongs. Sidechain blocks have the same height as their corresponding bitcoin blocks, 
-although in practice their [bids](#bid) may be shifted due to delays or reorgs.
-
-The first sidechain block contains no transactions, empty state and has height `...` (TBD).
 
 
 #### Reward
@@ -188,7 +202,7 @@ struct Block {
 The algorithm for deterministically merging bags into a block is as follows:
 
 1. For each bag, compute the [reward](#reward) and add resulting contract IDs to the _maturation list_.
-2. All bags must link to the same previous block (`prev`). Otherwise, fail validation.
+2. All bags must be [_compatible_](#compatibility-of-bags). Otherwise, fail validation.
 3. All bags must have the same `ext` value. The `block.ext` is set to that value. Otherwise, fail validation.
 4. Validate bag timestamps: 
     1. If the bag timestamp is less or equal to the median time past of the block to which it belongs (via [height](#height)), fail validation.
