@@ -88,7 +88,7 @@ Each bag has ancestors - a set of bags for which the bag is a child in the chain
 Ancestor `H-M` must be read as an _ancestor located at the height H-M_. Ancestors `H-M..H-K` must be read as _a set of ancestors located from height H-M to height H-K_, where each ancestor can be not connected directly, but from another ancestor.
 
 Each ancestor H-K for bag B must fulfill the following rules:
-1. Ancestors H-K-1..H-M should be the same for the ancestor H-K and for other ancestors connected to the bag B.
+1. Ancestors H-K-1..H-M should be the same for the ancestor H-K and for other ancestors connected to the bag B at the height H-K.
 
 
 #### Bag ID
