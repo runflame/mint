@@ -121,7 +121,7 @@ Tx root is defined as [Merkle root hash](zkvm-spec.md#merkle-binary-tree) of the
 
 Reward is an asset with flavor `0` that’s given to the creators of the [block](#block) in proportion to their [bids](#bid). 
 
-Reward consists of [transaction fees](#fee) and [inflation](#inflation). 
+Reward consists of [transaction fees](#fee) and [inflation](#inflation).
 
 For each transaction, the fee is distributed among bids that include that transaction.
 
@@ -129,15 +129,20 @@ Inflation is distributed among all the bids.
 
 For a block with a given height `h` the reward is computed as follows:
 
-1. Sum up all bid amounts (in satoshis) into `X`.
-2. For each transaction `tx_k`, sum up bid amounts from the bags that contain that transaction into `Z_k`.
-3. For each bid with amount `x_i` and transaction `tx_k`, compute the fee reward `F_{i,k} = fee * x_i / Z_k` (128-bit division of 64-bit unsigned integers, rounding down).
-4. Compute the inflation amount `R` according to the block height:
+1. For each bid `i` compute share:
+    1. Initial share `x` is a bid amount (in satoshis).
+    2. Find a block in which the bag with that bid is marked as ancestor (exists in the field `bag.ancestors`). Let it be at height `h'`.
+    3. Calculate discount for the bid: `d = (h - h' - 1) / 100`. Maximum discount can be `0.01` if the height is `h - h' = 100`. Note that in case when `h - h' > 100` chain is invalid, so we don't consider this case.
+    4. Multiply share at discount: `x = x * d`.
+2. Sum up all bid shares into `X`.
+3. For each transaction `tx_k`, sum up bid amounts from the bags that contain that transaction into `Z_k`.
+4. For each bid with amount `x_i` and transaction `tx_k`, compute the fee reward `F_{i,k} = fee * x_i / Z_k` (128-bit division of 64-bit unsigned integers, rounding down).
+5. Compute the inflation amount `R` according to the block height:
     1. Subtract the initial block [height](#height): `h' = h - INITIAL_HEIGHT`
     2. Start with inflation `R = 50'000'000` and while the `h' > 210'000` and inflation is greater than zero, divide the inflation by 2 (rounding down) and subtract 210'000 from `h'`.
-    3. For each bid with amount `x_i` compute inflation reward `R_i = R * x_i / X` (128-bit division of 64-bit unsigned integers, rounding down).
-5. For each bid `i`, sum up `F_{i,k}` from each transaction `tx_k` and add inflation reward `R_i`. The resulting amount is the total award `T_i` per bid. 
-6. For each bid `bid_i` and total award `T_i` create a UTXO with the predicate `bid_i.address`. Unique anchor is computed as follows using the [transcript](#transcript): 
+    3. For each bid with share `x_i` compute inflation reward `R_i = R * x_i / X` (128-bit division of 64-bit unsigned integers, rounding down).
+6. For each bid `i`, sum up `F_{i,k}` from each transaction `tx_k` and add inflation reward `R_i`. The resulting amount is the total award `T_i` per bid. 
+7. For each bid `bid_i` and total award `T_i` create a UTXO with the predicate `bid_i.address`. Unique anchor is computed as follows using the [transcript](#transcript): 
 
    ```
    T = Transcript("Flame.Reward")
@@ -146,7 +151,7 @@ For a block with a given height `h` the reward is computed as follows:
    bag_id = T.challenge_bytes("anchor")
    ```
 
-7. The resulting contract ID is stored in the _maturation list_ until block height = height + [maturation period](#maturation-period).
+8. The resulting contract ID is stored in the _maturation list_ until block height = height + [maturation period](#maturation-period).
 
 
 #### Fee
