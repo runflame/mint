@@ -236,6 +236,9 @@ Block size is limited to prevent denial-of-service attacks, but may slowly expan
 For the purposes of this specification exact block size limit is unimportant.
 Instead we define an abstract function `size(height) -> bytes` that maps every block height to its maximum size in bytes.
 
+#### Chain
+
+Chain is a set of blocks where all the bags at the same height is [compatible](#compatibility-of-bags).
 
 #### Transcript
 
