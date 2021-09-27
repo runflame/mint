@@ -135,8 +135,8 @@ For a block with a given height `h` the reward is computed as follows:
     3. Calculate discount for the bid: `d = (h - h' - 1) / 100`. Maximum discount can be `0.01` if the height is `h - h' = 100`. Note that in case when `h - h' > 100` chain is invalid, so we don't consider this case.
     4. Multiply share at discount: `x = x * d`.
 2. Sum up all bid shares into `X`.
-3. For each transaction `tx_k`, sum up bid amounts from the bags that contain that transaction into `Z_k`.
-4. For each bid with amount `x_i` and transaction `tx_k`, compute the fee reward `F_{i,k} = fee * x_i / Z_k` (128-bit division of 64-bit unsigned integers, rounding down).
+3. For each transaction `tx_k`, sum up bid shares from the bags that contain that transaction into `Z_k`.
+4. For each bid with share `x_i` and transaction `tx_k`, compute the fee reward `F_{i,k} = fee * x_i / Z_k` (128-bit division of 64-bit unsigned integers, rounding down).
 5. Compute the inflation amount `R` according to the block height:
     1. Subtract the initial block [height](#height): `h' = h - INITIAL_HEIGHT`
     2. Start with inflation `R = 50'000'000` and while the `h' > 210'000` and inflation is greater than zero, divide the inflation by 2 (rounding down) and subtract 210'000 from `h'`.
