@@ -333,7 +333,7 @@ The algorithm for validating the block is the following:
 5. For each bag in the list:
     1. Check that all ancestors contained in `bag.ancestors` located at the height no more than `bag.height - L`, where `L` is [late period](#late-period).
     2. Check that tx locktime is expressed in block height and equals H0 + block.height.
-    3. Check that bag.prev == block.prev and bag.height == block.height.
+    3. Check that all bags in the block have the same ancestors.
     4. Check bag size to be less or equals the current [blocksize limit](#block-size).
     5. Apply transactions, skipping duplicates from the previously processed commit within this block.
     6. Check block size to be less or equals the current [blocksize limit](#block-size).
