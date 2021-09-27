@@ -132,7 +132,7 @@ For a block with a given height `h` the reward is computed as follows:
 1. For each bid `i` compute share:
     1. Initial share `x` is a bid amount (in satoshis).
     2. Find a block in which the bag with that bid is marked as ancestor (exists in the field `bag.ancestors`). Let it be at height `h'`.
-    3. Calculate discount for the bid: `d = (h - h' - 1) / 100`. Maximum discount can be `0.01` if the height is `h - h' = 100`. Note that in case when `h - h' > 100` chain is invalid, so we don't consider this case.
+    3. Calculate discount for the bid: `d = (h - h' - 1) / L`, where `L` is the [late period](#late-period). Note that in case when `h - h' > L` chain is invalid, so we don't consider this case.
     4. Multiply share at discount: `x = x * d`.
 2. Sum up all bid shares into `X`.
 3. For each transaction `tx_k`, sum up bid shares from the bags that contain that transaction into `Z_k`.
@@ -187,6 +187,11 @@ For mainnet maturity period is set to `100` blocks.
 
 Rewards are created immediately at each block, but are stored in a _maturation list_ preventing their use until they mature.
 
+#### Late period
+
+Late period is the maximum difference in height between the ancestor and the child. If the chain contains ancestors that are linked to the child at more than late period height, chain is invalid.
+
+For mainnet late period is set to `44` blocks.
 
 #### Block
 
@@ -326,7 +331,7 @@ The algorithm for validating the block is the following:
 3. Check that block.prev points to the current tip.
 4. Check that bags are ordered primarily by BTC amount burned, secondarily by BitcoinTxID lexicographically (lowest hash first).
 5. For each bag in the list:
-    1. Check that tx with `BitcoinTxID` exists in bitcoin main chain and its first output correctly commits to the sidechain ID and the bag ID.
+    1. Check that all ancestors contained in `bag.ancestors` located at the height no more than `bag.height - L`, where `L` is [late period](#late-period).
     2. Check that tx locktime is expressed in block height and equals H0 + block.height.
     3. Check that bag.prev == block.prev and bag.height == block.height.
     4. Check bag size to be less or equals the current [blocksize limit](#block-size).
