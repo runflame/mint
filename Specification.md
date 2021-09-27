@@ -50,15 +50,12 @@ A set of [sidechain transactions](#transaction) selected as a sidechain block ca
 
 One or more bags are used to construct a [sidechain block](#block).
 
-TBD: a bag cannot contain information about a bid because the bid must contain bag id, so it produces an interdependence.
 ```
 struct Bag {
     height: u64,             // height of the new block
     ancestors: Vec<BagID>,   // hashes of the ancestors bags
     timestamp_ms: u64,       // bag timestamp
     reward_address: Address, // sidechain predicate that receives the sidechain reward
-    bid_tx: BitcoinTxID,     // bitcoin tx id that bids on this bag
-    bid_output: u64,         // bid tx output index that commits to this bag
     bid_amount: u64,         // amount of satoshis bid on this amount
     txs: Vec<Tx>,            // sidechain txs in the new block
     ext: Vec<u8>,
@@ -100,10 +97,11 @@ Defined via a [transcript](#transcript):
 ```
 T = Transcript("Flame.Bag")
 T.append_u64le("height", bag.height)
-// TBD: add ancestors to the transcript.
+T.append("ancestors_count", bag.ancestors.len())
+foreach ancestor in bag.ancestors {
+    T.append("ancestor", ancestor)
+}
 T.append("address", bag.reward_address)
-T.append("bid_tx", bag.bid_tx)
-T.append_u64le("bid_output", bag.bid_output)
 T.append_u64le("bid_amount", bag.bid_amount)
 T.append("txroot", MerkleRoot(bag.txs))
 T.append("ext", bag.ext)
