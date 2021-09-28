@@ -131,8 +131,8 @@ For a block with a given height `h` the reward is computed as follows:
 1. For each bid `i` compute share:
     1. Initial share `x` is a bid amount (in satoshis).
     2. Find a block in which the bag with that bid is directly connected. Let it be at height `h'`.
-    3. Calculate discount for the bid: `d = (h - h' + 1) / L`, where `L` is the [late period](#late-period). Note that in case when `h - h' > L` chain is invalid, so we don't consider this case.
-    4. Multiply share at discount: `x = x * d`.
+    3. Calculate discount for the bid: `d = (h - h' - 1) / L`, where `L` is the [late period](#late-period). Note that in case when `h - h' > L` chain is invalid, so we don't consider this case.
+    4. Multiply share at discount: `x = x - (x * d)`.
 2. Sum up all bid shares into `X`.
 3. For each transaction `tx_k`, sum up bid shares from the bags that contain that transaction into `Z_k`.
 4. For each bid with share `x_i` and transaction `tx_k`, compute the fee reward `F_{i,k} = fee * x_i / Z_k` (128-bit division of 64-bit unsigned integers, rounding down).
