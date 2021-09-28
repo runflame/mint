@@ -28,7 +28,7 @@ Sidecoins are released at a fixed schedule, just like bitcoins, in exchange for 
 Users can join and leave the network. Any node can be a mint node without the need for specialized hardware.
 
 The sidechain is a directed acyclic graph of [blocks](#block). 
-The chain with the largest [weight](#weight) is automatically selected as a main chain.
+The chain with the largest weight is automatically [selected as a main chain](#consensus).
 
 Each [block](#block) consists of [bags](#bag) of transactions that do not contain double-spends.
 Individual minters compose [bags](#bag) and commit to them by making [bids](#bid) on bitcoin chain.
