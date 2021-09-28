@@ -75,17 +75,16 @@ In this specification height will be labeled as `H`. Note like `H-M` should be r
 
 Bags are called compatible if:
 1. They have the same height.
-2. They have the same set of ancestors from height (H-1) to height (H-M), where M is maturation period.
-3. Their transactions do not contain double spends.
+2. They have the same set of ancestors from height `H-1` to height `H-L` inclusive, where `L` is [late period](#late-period).
 
 ##### Ancestors
 
-Each bag has ancestors - a set of bags for which the bag is a child in the chain. An ancestor must have a height strictly less than a child height. Ancestors can be connected directly by adding them to field `Bag.ancestors` and also indirectly. Ancestor is indirectly connected if it is not contained in the `Bag.ansectors`.
+Each bag has ancestors - a set of bags for which the bag is a child in the chain. An ancestor must have a height strictly less than a child height. Ancestors can be connected directly by adding them to the field `Bag.ancestors` and also indirectly. Ancestor is indirectly connected if it is not contained in the `Bag.ansectors`, but it is contained in some ancestor that is already connected directly or indirectly to the bag.
 
-Ancestor `H-M` must be read as an _ancestor located at the height H-M_. Ancestors `H-M..H-K` must be read as _a set of ancestors located from height H-M to height H-K_, where each ancestor can be not connected directly, but from another ancestor.
+Ancestor `H-M` should be read as an _ancestor located at the height H-M_. Ancestors `H-M..H-K` must be read as _a set of ancestors located from height H-M to height H-K_, where each ancestor can be connected directly or indirectly.
 
-Each ancestor H-K for bag B must fulfill the following rules:
-1. Ancestors H-K-1..H-M should be the same for the ancestor H-K and for other ancestors connected to the bag B at the height H-K.
+Each ancestor `H-K` for the bag `B` with height `H` must fulfill the following rules:
+1. Ancestors `H-K-1..H-M` should be the same for the ancestor `H-K` and for other ancestors connected to the bag `B` at the height `H-K`.
 
 
 #### Bag ID
@@ -125,12 +124,14 @@ For each transaction, the fee is distributed among bids that include that transa
 
 Inflation is distributed among all the bids.
 
+Reward for the bag computes after [late period](#late-period). In other words, reward for the block with height `H` will be computed when a block with height `H+L` is arrived.
+
 For a block with a given height `h` the reward is computed as follows:
 
 1. For each bid `i` compute share:
     1. Initial share `x` is a bid amount (in satoshis).
-    2. Find a block in which the bag with that bid is marked as ancestor (exists in the field `bag.ancestors`). Let it be at height `h'`.
-    3. Calculate discount for the bid: `d = (h - h' - 1) / L`, where `L` is the [late period](#late-period). Note that in case when `h - h' > L` chain is invalid, so we don't consider this case.
+    2. Find a block in which the bag with that bid is directly connected. Let it be at height `h'`.
+    3. Calculate discount for the bid: `d = (h - h' + 1) / L`, where `L` is the [late period](#late-period). Note that in case when `h - h' > L` chain is invalid, so we don't consider this case.
     4. Multiply share at discount: `x = x * d`.
 2. Sum up all bid shares into `X`.
 3. For each transaction `tx_k`, sum up bid shares from the bags that contain that transaction into `Z_k`.
@@ -183,7 +184,7 @@ Number of blocks that must pass before the [reward](#reward) contract can be spe
 
 For mainnet maturity period is set to `100` blocks.
 
-Rewards are created immediately at each block, but are stored in a _maturation list_ preventing their use until they mature.
+Rewards are created after [late period](#late-period), but are stored in a _maturation list_ preventing their use until they mature.
 
 #### Late period
 
@@ -345,7 +346,7 @@ The algorithm for validating the block is the following:
 
 ### Consensus
 
-Due to double-spends and conflicting bags, there could be multiple valid sidechains.
+Due to double-spends and conflicting bags, there could be multiple valid [chains](#chain).
 To resolve which one is the main one, the following consensus algorithm is proposed:
 
 1. Each chain has **total weight** as a sum of weights of each of its blocks. If a better chain appears, reorganization procedure is used to switch from the current chain to another one: blocks are rolled back one after another to the common block, and then another chain's blocks are applied per usual rules. If the new chain violates rules, it is banned and the reorganization is performed back to the valid chain.
