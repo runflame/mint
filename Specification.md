@@ -142,13 +142,13 @@ For a block with a given height `h` the reward is computed as follows:
     3. Calculate discount for the bid: `d = (h - h' - 1) / L`, where `L` is the [late period](#late-period). Note that in case when `h - h' > L` chain is invalid, so we don't consider this case.
     4. Multiply share at discount: `x = x - (x * d)`.
 2. Sum up all bid shares into `X`.
-3. For each transaction `tx_k`, sum up bid shares from the bags that contain that transaction into `Z_k`.
-4. For each bid with share `x_i` and transaction `tx_k`, compute the fee reward `F_{i,k} = fee * x_i / Z_k` (128-bit division of 64-bit unsigned integers, rounding down).
+3. Sum up all transaction fees into `F`. If the transaction is contained in more than 1 bag, add it only once.
+4. For each bid with share `x_i`, compute the fee reward `F_i = x_i * F / X` (128-bit division of 64-bit unsigned integers, rounding down).
 5. Compute the inflation amount `R` according to the block height:
     1. Subtract the initial block [height](#height): `h' = h - INITIAL_HEIGHT`
     2. Start with inflation `R = 50'000'000` and while the `h' > 210'000` and inflation is greater than zero, divide the inflation by 2 (rounding down) and subtract 210'000 from `h'`.
     3. For each bid with share `x_i` compute inflation reward `R_i = R * x_i / X` (128-bit division of 64-bit unsigned integers, rounding down).
-6. For each bid `i`, sum up `F_{i,k}` from each transaction `tx_k` and add inflation reward `R_i`. The resulting amount is the total award `T_i` per bid. 
+6. For each bid `i`, sum up fee reward `F_i` and inflation reward `R_i`. The resulting amount is the total award `T_i` per bid. 
 7. For each bid `bid_i` and total award `T_i` create a UTXO with the predicate `bid_i.address`. Unique anchor is computed as follows using the [transcript](#transcript): 
 
    ```
