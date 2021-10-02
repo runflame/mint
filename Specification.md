@@ -87,7 +87,7 @@ Bags are called compatible if:
 
 ##### Ancestors
 
-Each bag has ancestors - a set of bags for which the bag is a child in the chain. An ancestor must have a height strictly less than a child height. Ancestors can be connected directly by adding them to the field `Bag.ancestors` and also indirectly. Ancestor is indirectly connected if it is not contained in the `Bag.ansectors`, but it is contained in some ancestor that is already connected directly or indirectly to the bag.
+Each bag has ancestors - a set of bags for which the bag is a child in the chain. An ancestor must have a height strictly less than a child height. Ancestors can be connected directly by adding them to the field `Bag.ancestors` and also indirectly. Ancestor is indirectly connected if it is not contained in the `Bag.ancestors`, but it is contained in some ancestor that is already connected directly or indirectly to the bag.
 
 Ancestor `H-M` should be read as an _ancestor located at the height H-M_. Ancestors `H-M..H-K` must be read as _a set of ancestors located from height H-M to height H-K_, where each ancestor can be connected directly or indirectly.
 
