@@ -48,9 +48,17 @@ Individual minters compose [bags](#bag) and commit to them by making [bids](#bid
 
 A bitcoin transaction output that destroys some number of coins, that commits to a [bag ID](#bag-id).
 
-Destination address for transaction must be set to [bag ID](#bag-id).
+In the bitcoin transaction output, bid [`pk_script`](https://en.bitcoin.it/wiki/Protocol_documentation#tx) field must contain the P2PKH script, but the pubkey hash must be replaced with the first 20 bytes of [bag id](#bag-id). So, final format of the bid `scriptPubKey` is:
+
+```
+DUP HASH160 <BagId first 20 bytes> EQUALVERIFY CHECKSIG
+```
 
 Bid transaction **lock time** is set to the bag’s height expressed in **blocks**.
+
+Bids are not stored entirely in the blockchain, due to:
+1. Bids already stored in the bitcoin chain.
+2. Bitcoin reorgs may broke existing bags in the sidechain.
 
 #### Bag
 
