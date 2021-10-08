@@ -48,11 +48,12 @@ Individual minters compose [bags](#bag) and commit to them by making [bids](#bid
 
 A bitcoin transaction output that destroys some number of coins, that commits to a [bag ID](#bag-id).
 
-In the bitcoin transaction output, bid [`pk_script`](https://en.bitcoin.it/wiki/Protocol_documentation#tx) field must contain the P2PKH script, but the pubkey hash must be replaced with the first 20 bytes of [bag id](#bag-id). So, final format of the bid `scriptPubKey` is:
+In the bitcoin transaction output, bid [`pk_script`](https://en.bitcoin.it/wiki/Protocol_documentation#tx) field must contain the P2WSH script version 0, but the scripthash must be replaced with the first 32 bytes of [bag id](#bag-id). So, final format of the bid `scriptPubKey` is:
 
 ```
-DUP HASH160 <BagId first 20 bytes> EQUALVERIFY CHECKSIG
+0 <BagId first 32 bytes>
 ```
+TBD: only p2wsh, or p2wpkh allowed too?
 
 Bid transaction **lock time** is set to the bag’s height expressed in **blocks**.
 

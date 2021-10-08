@@ -1,6 +1,3 @@
-use merlin::Transcript;
-use std::convert::TryFrom;
-
 pub struct BitcoinOutputLink {
     pub tx_id: bitcoin::Txid,
     pub output: u64,
@@ -30,26 +27,28 @@ impl Bid {
 
 // TODO: not sure if this abstraction is good, but i have not find other way to create verified bids yet
 pub trait TrackerImpl {
-    fn verify_btc_bag_exists(&self, pubkey_hash: bitcoin::PubkeyHash) -> Option<BagId>;
+    fn verify_btc_bag_exists(&self, bag_id: &[u8]) -> Option<BagId>;
 
     fn bid_from_btc_tx(&self, tx: bitcoin::Transaction, output_number: u64) -> Option<Bid> {
-        use bitcoin::hashes::Hash;
-
         let tx_id = tx.txid();
         let out = &tx.output[output_number as usize];
         let amount = out.value;
 
         let script = &out.script_pubkey;
-        let pubkey_hash = if script.is_p2pkh() {
-            bitcoin::PubkeyHash::from_slice(&script.as_bytes()[3..23]).unwrap()
-        }
-        else {
-            return None;
-        };
+        let bid_bag_id = parse_bag_id(script)?;
 
-        let bag_id = self.verify_btc_bag_exists(pubkey_hash)?;
+        let bag_id = self.verify_btc_bag_exists(bid_bag_id)?;
         let bid = Bid::new(BitcoinOutputLink::new(tx_id, output_number), amount, bag_id);
 
         Some(bid)
+    }
+}
+
+fn parse_bag_id(script: &bitcoin::Script) -> Option<&[u8]> {
+    if script.is_v0_p2wsh() {
+        Some(&script.as_bytes()[3..23])
+    }
+    else {
+        None
     }
 }
