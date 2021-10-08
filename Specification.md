@@ -90,12 +90,6 @@ The first sidechain block contains no transactions, empty state and has height `
 
 In this specification height will be labeled as `H`. Note like `H-M` should be read as _the height of the bag located M below_.
 
-##### Compatibility of bags
-
-Bags are called compatible if:
-1. They have the same height.
-2. They have the same set of ancestors from height `H-1` to height `H-L` inclusive, where `L` is [late period](#late-period).
-
 ##### Ancestors
 
 Each bag has ancestors - a set of bags for which the bag is a child in the chain. An ancestor must have a height strictly less than a child height. Ancestors can be connected directly by adding them to the field `Bag.ancestors` and also indirectly. Ancestor is indirectly connected if it is not contained in the `Bag.ancestors`, but it is contained in some ancestor that is already connected directly or indirectly to the bag.
@@ -104,6 +98,13 @@ Ancestor `H-M` should be read as an _ancestor located at the height H-M_. Ancest
 
 Each ancestor `H-K` for the bag `B` with height `H` must fulfill the following rules:
 1. Ancestors `H-K-1..H-M` should be the same for the ancestor `H-K` and for other ancestors connected to the bag `B` at the height `H-K`.
+
+##### Compatibility of bags
+
+Bags `A` and `B` are called compatible if:
+1. They have the same height.
+2. They have the same set of ancestors from height `H-1` to height `H-L` inclusive, where `L` is [late period](#late-period).
+3. There are no duplicate `bag id`s in the `H..H-L` height. Note that bags `A` and `B` **must have different bag ids** too.
 
 
 #### Bag ID
