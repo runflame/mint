@@ -1,3 +1,5 @@
+use blockchain::utreexo;
+
 pub struct BitcoinOutputLink {
     pub tx_id: bitcoin::Txid,
     pub output: u64,
@@ -51,4 +53,20 @@ fn parse_bag_id(script: &bitcoin::Script) -> Option<&[u8]> {
     else {
         None
     }
+}
+
+type BlockId = [u8; 32];
+
+pub struct Block {
+    height: u64,
+    prev: BlockId,
+    timestamp_ms: u64,
+    txroot: merkle::Hash,
+    state: merkle::Hash,
+    bags: Vec<BagId>,
+    ext: Vec<u8>,
+}
+
+impl Block {
+
 }
