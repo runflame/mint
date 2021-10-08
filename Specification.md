@@ -380,13 +380,14 @@ The algorithm for validating the block is the following:
 3. Check that block.prev points to the current tip.
 4. Check that bags are ordered primarily by BTC amount burned, secondarily by BitcoinTxID lexicographically (lowest hash first).
 5. For each bag in the list:
-    1. Check that all ancestors contained in `bag.ancestors` located at the height no more than `bag.height - L`, where `L` is [late period](#late-period).
-    2. Check that tx locktime is expressed in block height and equals H0 + block.height.
-    3. Check that all bags in the block have the same ancestors.
-    4. Check bag size to be less or equals the current [blocksize limit](#block-size).
-    5. Apply transactions, skipping duplicates from the previously processed commit within this block.
-    6. Check block size to be less or equals the current [blocksize limit](#block-size).
-    7. Fail the entire block if invalid tx is encountered (including double-spend attempt).
+    1. Check that `bag.bid_amount` is **greater or equal** to burned btc in the bid related to the bag. TODO: add possibility to add more bids.
+    2. Check that all ancestors contained in `bag.ancestors` located at the height no more than `bag.height - L`, where `L` is [late period](#late-period).
+    3. Check that tx locktime is expressed in block height and equals H0 + block.height.
+    4. Check that all bags in the block have the same ancestors.
+    5. Check bag size to be less or equals the current [blocksize limit](#block-size).
+    6. Apply transactions, skipping duplicates from the previously processed commit within this block.
+    7. Check block size to be less or equals the current [blocksize limit](#block-size).
+    8. Fail the entire block if invalid tx is encountered (including double-spend attempt).
 6. Compute allocations of [block reward](#reward) in the following manner:
     1. [Inflation](#inflation) units are divided in proportion to the satoshis burned in all the [bags](#bag) constituting the block.
     2. Transaction fees are divided in proportion to the satoshis burned in the [bags](#bag) that contain the transaction. 
