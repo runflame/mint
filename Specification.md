@@ -198,7 +198,7 @@ H0 + 840'000      | H0 + 1050'000 |  3'125'000
 
 #### Maturation period
 
-Number of blocks that must pass before the [reward](#reward) contract can be spent.
+Number of blocks that must pass after [late period](#late-period) before the [reward](#reward) contract can be spent. In other words, if late period is `N` and maturation period is `M`, reward will be available after `N+M` blocks.
 
 For mainnet maturity period is set to `100` blocks.
 
