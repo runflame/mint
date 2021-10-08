@@ -23,6 +23,8 @@
   * [Consensus](#consensus)
   * [Minter](#minter)
   * [Minting](#minting)
+  * [Transaction](#transaction)
+  * [Transaction ID](#transaction-id)
 * [Security](#security)
 
 
@@ -217,8 +219,8 @@ struct Block {
     height: u64,
     prev: BlockID,
     timestamp_ms: u64,
-    txroot: <Hash of merkle root of included txs>,
-    state: <Utreexo root>
+    txroot: MerkleHash, // Hash of merkle root of included txs. 32 bytes
+    state: MerkleHash, // Utreexo root. 32 bytes
     bags: Vec<BagID>,
     ext: Vec<u8>,
 }
@@ -246,7 +248,23 @@ The algorithm for deterministically merging bags into a block is as follows:
 
 #### Block ID
 
-TBD: hash the block fields.
+Block ID is a hash of the contents of the [block](#block).
+
+Defined via a [transcript](#transcript):
+
+```
+T = Transcript("Flame.Block")
+T.append_u64le("height", block.height)
+T.append("prevblock", i)
+T.append_u64le("timestamp", block.timestamp_ms)
+T.append("txroot", block.txroot)
+T.append("state", block.state)
+foreach bag in block.bags {
+    T.append("bag", bag)
+}
+T.append("ext", block.ext)
+block_id = T.challenge_bytes("id")
+```
 
 
 #### Block size
@@ -259,6 +277,18 @@ Instead we define an abstract function `size(height) -> bytes` that maps every b
 #### Chain
 
 Chain is a set of blocks where all the bags at the same height is [compatible](#compatibility-of-bags).
+
+#### Transaction
+
+Transaction is [ZkVM transaction](https://github.com/stellar/slingshot/blob/main/zkvm/docs/zkvm-spec.md#transaction). It contains data and logic need to validate the transaction in the ZkVM.
+
+##### Transaction formats
+TODO
+
+#### Transaction ID
+
+Same as [transaction ID](https://github.com/stellar/slingshot/blob/main/zkvm/docs/zkvm-spec.md#transaction-id) of the ZkVM transaction.
+
 
 #### Transcript
 
@@ -334,6 +364,9 @@ Note that we do not require the length of the input list to be a power of two.
 The resulting merkle binary tree may thus not be balanced; however,
 its shape is uniquely determined by the number of leaves.
 
+#### Utreexo
+
+Sidechain use Utreexo implementation from [slingshot project](https://github.com/stellar/slingshot/blob/main/zkvm/docs/utreexo.md)
 
 
 ### Sidechain validation
