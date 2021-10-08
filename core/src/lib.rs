@@ -1,13 +1,14 @@
 use blockchain::utreexo;
 
-pub struct BitcoinOutputLink {
+/// An outpoint - a combination of a transaction hash and an index n into its vout.
+pub struct OutPoint {
     pub tx_id: bitcoin::Txid,
     pub output: u64,
 }
 
-impl BitcoinOutputLink {
+impl OutPoint {
     pub fn new(tx_id: bitcoin::Txid, output: u64) -> Self {
-        BitcoinOutputLink { tx_id, output }
+        OutPoint { tx_id, output }
     }
 }
 
@@ -16,13 +17,13 @@ pub type Satoshi = u64;
 pub type BagId = [u8; 32];
 
 pub struct Bid {
-    pub link: BitcoinOutputLink,
+    pub link: OutPoint,
     pub amount: Satoshi,
     pub bag: BagId,
 }
 
 impl Bid {
-    pub fn new(link: BitcoinOutputLink, amount: Satoshi, bag: BagId) -> Self {
+    pub fn new(link: OutPoint, amount: Satoshi, bag: BagId) -> Self {
         Bid { link, amount, bag }
     }
 }
@@ -40,7 +41,7 @@ pub trait TrackerImpl {
         let bid_bag_id = parse_bag_id(script)?;
 
         let bag_id = self.verify_btc_bag_exists(bid_bag_id)?;
-        let bid = Bid::new(BitcoinOutputLink::new(tx_id, output_number), amount, bag_id);
+        let bid = Bid::new(OutPoint::new(tx_id, output_number), amount, bag_id);
 
         Some(bid)
     }
