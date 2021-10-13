@@ -283,8 +283,10 @@ Chain is a set of blocks where all the bags at the same height is [compatible](#
 
 Transaction is [ZkVM transaction](https://github.com/stellar/slingshot/blob/main/zkvm/docs/zkvm-spec.md#transaction). It contains data and logic need to validate the transaction in the ZkVM.
 
-##### Transaction formats
-TODO
+##### Transaction format
+
+All transactions must fulfill following rules:
+1. Inputs and outputs must contain only sidechain flavor (TBD: flavor value).
 
 #### Transaction ID
 
