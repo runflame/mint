@@ -1,7 +1,10 @@
+mod program;
+
 use blockchain::{BlockTx};
 use zkvm::curve25519_dalek::scalar::Scalar;
-use zkvm::{Program, Contract, Predicate, PortableItem, Value, Commitment, Anchor};
+use zkvm::{Program, Contract, Predicate, PortableItem, Value, Commitment, Anchor, Prover, Signature, TxHeader, UnsignedTx, Multisignature};
 use merlin::Transcript;
+use zkvm::bulletproofs::BulletproofGens;
 
 /// An outpoint - a combination of a transaction hash and an index n into its vout.
 pub struct OutPoint {
