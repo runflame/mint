@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 bitcoin = "0.26.1"
-merlin = "3.0.0"
+merlin = "2"
 # TODO: switch to https://github.com/stellar/slingshot after it bump versions
 zkvm = { git = "https://github.com/p0lunin/slingshot/", package = "zkvm" }
 merkle = { git = "https://github.com/p0lunin/slingshot/", package = "merkle" }
