@@ -286,7 +286,7 @@ Transaction is [ZkVM transaction](https://github.com/stellar/slingshot/blob/main
 ##### Transaction format
 
 All transactions must fulfill following rules:
-1. Inputs and outputs must contain only sidechain flavor (TBD: flavor value).
+1. Inputs, outputs and fee must contain only sidechain flavor 0.
 
 #### Transaction ID
 

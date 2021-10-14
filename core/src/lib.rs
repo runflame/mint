@@ -80,7 +80,7 @@ impl Block {
 
 pub fn sidecoin_flavor() -> Scalar {
     // Scalar has no const fns to make this as a constant instead of a function.
-    Scalar::from(1u8)
+    Scalar::zero()
 }
 
 pub struct Tx {
