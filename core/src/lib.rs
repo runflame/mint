@@ -5,6 +5,7 @@ use zkvm::curve25519_dalek::scalar::Scalar;
 use zkvm::{Program, Contract, Predicate, PortableItem, Value, Commitment, Anchor, Prover, Signature, TxHeader, UnsignedTx, Multisignature};
 use merlin::Transcript;
 use zkvm::bulletproofs::BulletproofGens;
+use std::convert::TryFrom;
 
 /// An outpoint - a combination of a transaction hash and an index n into its vout.
 pub struct OutPoint {
@@ -36,7 +37,7 @@ impl Bid {
 
 // TODO: not sure if this abstraction is good, but i have not find other way to create verified bids yet
 pub trait TrackerImpl {
-    fn verify_btc_bag_exists(&self, bag_id: &[u8]) -> Option<BagId>;
+    fn verify_btc_bag_exists(&self, bag_id: &BagId) -> Option<()>;
 
     fn bid_from_btc_tx(&self, tx: bitcoin::Transaction, output_number: u64) -> Option<Bid> {
         let tx_id = tx.txid();
@@ -44,18 +45,18 @@ pub trait TrackerImpl {
         let amount = out.value;
 
         let script = &out.script_pubkey;
-        let bid_bag_id = parse_bag_id(script)?;
+        let bag_id = parse_bag_id(script)?;
 
-        let bag_id = self.verify_btc_bag_exists(bid_bag_id)?;
+        self.verify_btc_bag_exists(&bag_id)?;
         let bid = Bid::new(OutPoint::new(tx_id, output_number), amount, bag_id);
 
         Some(bid)
     }
 }
 
-fn parse_bag_id(script: &bitcoin::Script) -> Option<&[u8]> {
+fn parse_bag_id(script: &bitcoin::Script) -> Option<BagId> {
     if script.is_v0_p2wsh() {
-        Some(&script.as_bytes()[3..23])
+        Some(BagId::try_from(&script.as_bytes()[2..34]).expect("BagId have 32 bytes"))
     }
     else {
         None
