@@ -140,9 +140,7 @@ Reward is an asset with flavor `0` that’s given to the creators of the [block]
 
 Reward consists of [transaction fees](#fee) and [inflation](#inflation).
 
-For each transaction, the fee is distributed among bids that include that transaction.
-
-Inflation is distributed among all the bids.
+Inflation and fee is distributed among all the bids.
 
 Reward for the bag computes after [late period](#late-period). In other words, reward for the block with height `H` will be computed when a block with height `H+L` is arrived.
 
