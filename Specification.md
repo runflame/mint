@@ -55,7 +55,6 @@ In the bitcoin transaction output, bid [`pk_script`](https://en.bitcoin.it/wiki/
 ```
 0 <BagId first 32 bytes>
 ```
-TBD: only p2wsh, or p2wpkh allowed too?
 
 Bid transaction **lock time** is set to the bag’s height expressed in **blocks**.
 
