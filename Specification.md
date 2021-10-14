@@ -241,8 +241,9 @@ The algorithm for deterministically merging bags into a block is as follows:
 9. Add transaction with its witness data to the block and apply to the current blockchain state (as specified by the previous block). 
    Fail if double-spend detected.
 10. Compute the merkle root `txroot` over a list of collected transactions.
-11. Add reward contract IDs to the utreexo state.
-12. Compute the new utreexo state root for the block.
+11. Compute reward contract IDs for the bags and add them to the maturation list.
+12. Add reward contract IDs for bags that are included in `H-M-L` block from the maturation list to the utreexo state.
+13. Compute the new utreexo state root for the block.
 
 
 #### Block ID
