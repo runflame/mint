@@ -1,12 +1,16 @@
-use std::time::Duration;
-use bitcoincore_rpc::{Client, Auth, RpcApi};
-use bitcoin::{Address, BlockHash, Txid};
-use serde_json::Value;
-use bitcoin::hashes::sha256d::Hash;
-use std::str::FromStr;
 use bitcoin::hashes::hex::ToHex;
+use bitcoin::hashes::sha256d::Hash;
+use bitcoin::{Address, BlockHash, Txid};
+use bitcoincore_rpc::{Auth, Client, RpcApi};
+use serde_json::Value;
+use std::str::FromStr;
+use std::time::{Duration, Instant};
 
-pub fn init_client(path: &str, block_num: u64, offset: u32) -> (TempDir, KillBitcoind, Client, Address) {
+pub fn init_client(
+    path: &str,
+    block_num: u64,
+    offset: u32,
+) -> (TempDir, KillBitcoind, Client, Address) {
     let rpc_port = 12001 + offset;
     let dir = TempDir::new(path.to_string());
     let node = setup_bitcoin_node(18444 + offset, rpc_port, path);
@@ -22,9 +26,7 @@ pub fn init_client(path: &str, block_num: u64, offset: u32) -> (TempDir, KillBit
         .unwrap();
 
     let address = client.get_new_address(Some("testwal"), None).unwrap();
-    client
-        .generate_to_address(block_num, &address)
-        .unwrap();
+    client.generate_to_address(block_num, &address).unwrap();
 
     (dir, node, client, address)
 }
@@ -94,5 +96,39 @@ impl Drop for KillBitcoind {
             .arg(&self.id)
             .spawn()
             .unwrap();
+    }
+}
+
+pub fn add_node_client(client: &Client, addr: &str) {
+    let _: Value = client
+        .call(
+            "addnode",
+            &[
+                Value::String(addr.to_string()),
+                Value::String("onetry".to_string()),
+            ],
+        )
+        .unwrap();
+}
+
+pub fn disconnect_node_client(client: &Client, addr: &str) {
+    let _: Value = client
+        .call("disconnectnode", &[Value::String(addr.to_string())])
+        .unwrap();
+}
+
+pub fn wait_until(seconds: u64, condition: impl Fn() -> bool) -> bool {
+    let instant = Instant::now();
+    loop {
+        let now = instant.elapsed();
+        if now.as_secs() >= seconds {
+            return condition();
+        } else {
+            if condition() {
+                return true;
+            } else {
+                std::thread::sleep(Duration::from_millis(100));
+            }
+        }
     }
 }
