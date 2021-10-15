@@ -32,6 +32,7 @@ fn test_reorg_longest_chain() {
     let (_dir1, _child1, client1, address1) = init_client(dir1, GENERATED_BLOCKS, OFFSET_N1);
     let (_dir2, _child2, client2, address2) = init_client(dir2, 0, OFFSET_N2);
 
+    const SATOSHIES_TO_SEND: u64 = 1000;
     const HEIGHT_BEFORE_FORK: u64 = GENERATED_BLOCKS * 2;
     const HEIGHT_CHAIN1: u64 = HEIGHT_BEFORE_FORK + 2;
     const HEIGHT_CHAIN2: u64 = HEIGHT_BEFORE_FORK + 3;
@@ -52,7 +53,9 @@ fn test_reorg_longest_chain() {
     wait!(client1.get_blockchain_info().unwrap().blocks == HEIGHT_BEFORE_FORK);
 
     // Both nodes have mint tx.
-    let tx_id = client1.send_mint_transaction(10, &BAG1_12).unwrap();
+    let tx_id = client1
+        .send_mint_transaction(SATOSHIES_TO_SEND, &BAG1_12)
+        .unwrap();
     let both_block = generate_block(&client1, &address1, &tx_id);
     // Wait before node2 receive block
     wait!(client2.get_blockchain_info().unwrap().best_block_hash == both_block);
@@ -63,17 +66,23 @@ fn test_reorg_longest_chain() {
 
     // Mine block with Bag2_1 on node 1.
     let last_block_chain_1 = {
-        let tx_id = client1.send_mint_transaction(10, &BAG2_1).unwrap();
+        let tx_id = client1
+            .send_mint_transaction(SATOSHIES_TO_SEND, &BAG2_1)
+            .unwrap();
         generate_block(&client1, &address1, &tx_id)
     };
 
     let (bag2_2block, bag3_2block) = {
         // Mine block with Bag2_2 on node 2.
-        let tx_id = client2.send_mint_transaction(10, &BAG2_2).unwrap();
+        let tx_id = client2
+            .send_mint_transaction(SATOSHIES_TO_SEND, &BAG2_2)
+            .unwrap();
         let bag1block = generate_block(&client2, &address2, &tx_id);
 
         // Mine block with Bag3_2 on node 2.
-        let tx_id = client2.send_mint_transaction(10, &BAG3_2).unwrap();
+        let tx_id = client2
+            .send_mint_transaction(SATOSHIES_TO_SEND, &BAG3_2)
+            .unwrap();
         let bag2block = generate_block(&client2, &address2, &tx_id);
 
         (bag1block, bag2block)

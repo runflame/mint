@@ -29,7 +29,7 @@ fn test_new_blocks_with_mint_txs<S: IndexStorage>(storage: S, dir: &str, offset:
     let (_dir, _child, client, address) = init_client(dir, GENERATED_BLOCKS, offset);
 
     // create mint transaction
-    let tx_id = client.send_mint_transaction(10, &[1; 32]).unwrap();
+    let tx_id = client.send_mint_transaction(1000, &[1; 32]).unwrap();
     let mint_block = generate_block(&client, &address, &tx_id);
 
     let mut index = Index::new(client, storage, Some(119));
