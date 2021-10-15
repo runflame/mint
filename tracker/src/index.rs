@@ -50,6 +50,10 @@ impl<C: BitcoinClient, S: IndexStorage> Index<C, S> {
     pub fn get_storage(&self) -> &S {
         &self.storage
     }
+
+    pub fn btc_client(&self) -> &C {
+        &self.btc_client
+    }
 }
 
 impl<C: BitcoinClient, S: IndexStorage> Index<C, S> {
