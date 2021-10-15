@@ -1,13 +1,11 @@
 use crate::bitcoin_client::BitcoinClient;
 use crate::record::{Record, RecordData};
 use crate::storage::IndexStorage;
-use bitcoin::blockdata::opcodes;
-use bitcoin::blockdata::script::Instruction;
 use bitcoin::{BlockHash, Transaction, TxOut};
 use bitcoincore_rpc::json::GetBlockHeaderResult;
 use std::cmp::Ordering;
 use std::collections::HashSet;
-use std::convert::TryInto;
+use std::convert::TryFrom;
 
 pub type BagId = [u8; 32];
 
@@ -177,32 +175,15 @@ fn parse_mint_transaction_btc_block(block: BlockHash, tx: Transaction) -> Option
 }
 
 fn parse_mint_btc_output(out: &TxOut) -> Option<RecordData> {
-    let mut instructions = out.script_pubkey.instructions();
-
-    let first_instruction = instructions.next().and_then(|res| res.ok())?;
-    assert_instruction_return(first_instruction)?;
-
-    let push_bytes_instr = instructions.next().and_then(|res| res.ok())?;
-    let bag_id = parse_push_32_bytes(push_bytes_instr)?;
-
-    let amount = out.value;
-    Some(RecordData { bag_id, amount })
-}
-
-fn assert_instruction_return(instr: Instruction) -> Option<()> {
-    match instr {
-        Instruction::Op(opcodes::all::OP_RETURN) => Some(()),
-        _ => None,
+    match out.script_pubkey.is_v0_p2wsh() {
+        true => {
+            let bag_id = BagId::try_from(&out.script_pubkey.as_bytes()[2..34])
+                .expect("Script is in p2wsh form");
+            let amount = out.value;
+            Some(RecordData { bag_id, amount })
+        }
+        false => None,
     }
-}
-
-fn parse_push_32_bytes(instr: Instruction) -> Option<[u8; 32]> {
-    let bytes = match instr {
-        Instruction::PushBytes(bytes) => bytes,
-        _ => return None,
-    };
-    let array = TryInto::<&[u8; 32]>::try_into(bytes).ok()?.clone();
-    Some(array)
 }
 
 fn is_block_in_main_chain(block: &GetBlockHeaderResult) -> bool {

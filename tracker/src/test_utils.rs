@@ -1,7 +1,7 @@
 use crate::bitcoin_client::BitcoinClient;
 use bitcoin::blockdata::{opcodes, script};
-use bitcoin::hashes::Hash;
-use bitcoin::{Block, BlockHash, BlockHeader, Transaction, TxOut, Txid};
+use bitcoin::hashes::{sha256, Hash};
+use bitcoin::{Block, BlockHash, BlockHeader, Transaction, TxOut, Txid, WScriptHash};
 use bitcoincore_rpc::bitcoincore_rpc_json::{FundRawTransactionResult, SignRawTransactionResult};
 use bitcoincore_rpc::json::GetBlockHeaderResult;
 use bitcoincore_rpc::json::GetBlockchainInfoResult;
@@ -155,10 +155,9 @@ pub fn create_test_mint_transaction(tx_data: impl AsRef<[u8]>) -> Transaction {
         input: vec![],
         output: vec![TxOut {
             value: 10,
-            script_pubkey: script::Builder::new()
-                .push_opcode(opcodes::all::OP_RETURN)
-                .push_slice(tx_data.as_ref())
-                .into_script(),
+            script_pubkey: script::Script::new_v0_wsh(&WScriptHash::from_hash(
+                sha256::Hash::from_slice(tx_data.as_ref()).unwrap(),
+            )),
         }],
     }
 }

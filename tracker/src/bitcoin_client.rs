@@ -1,7 +1,7 @@
 use crate::index::BagId;
 use bitcoin::blockdata::script;
 use bitcoin::consensus::Encodable;
-use bitcoin::{Block, BlockHash, Transaction, TxOut, Txid};
+use bitcoin::{Block, BlockHash, Transaction, TxOut, Txid, WScriptHash};
 use bitcoincore_rpc::json::{
     FundRawTransactionResult, GetBlockHeaderResult, GetBlockchainInfoResult,
     SignRawTransactionResult,
@@ -61,13 +61,17 @@ impl BitcoinClient for bitcoincore_rpc::Client {
 
 pub trait BitcoinMintExt: BitcoinClient {
     fn send_mint_transaction(&self, satoshies: u64, bag_id: &BagId) -> Result<Txid, Self::Err> {
+        use bitcoin::hashes::sha256;
+        use bitcoin::hashes::Hash;
+
+        let hash = sha256::Hash::from_slice(bag_id).expect("Bag id has 32 bytes, as sha256");
         let tx = Transaction {
             version: 2,
             lock_time: 0,
             input: vec![],
             output: vec![TxOut {
                 value: satoshies,
-                script_pubkey: script::Script::new_op_return(bag_id),
+                script_pubkey: script::Script::new_v0_wsh(&WScriptHash::from_hash(hash)),
             }],
         };
 
