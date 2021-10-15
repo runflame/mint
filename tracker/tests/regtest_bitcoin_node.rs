@@ -1,7 +1,7 @@
 mod utils;
 
-use crate::utils::init_client;
 use crate::utils::generate_block;
+use crate::utils::init_client;
 
 use tracker::bitcoin_client::BitcoinMintExt;
 use tracker::storage::memory::MemoryIndexStorage;
