@@ -63,11 +63,11 @@ impl<C: BitcoinClient, S: IndexStorage, B: BagStorage> Index<C, S, B> {
         let bid_data = parse_mint_transaction_btc_block(&tx, proof.outpoint.out_pos).unwrap();
         let bid = BidEntry {
             btc_block: response.info.blockhash.unwrap(),
-            btc_outpoint: proof.outpoint,
+            btc_outpoint: proof.outpoint.clone(),
             data: bid_data,
         };
         self.bags_storage
-            .insert_unconfirmed_bag(bid.data.bag_id.clone())
+            .insert_confirmed_bag(proof)
             .unwrap();
         self.bids_storage.store_record(bid).unwrap();
         if response.info.blockheight.unwrap() as u64 > self.current_height {
@@ -147,6 +147,13 @@ impl<C: BitcoinClient, S: IndexStorage, B: BagStorage> Index<C, S, B> {
 
     fn add_btc_block_to_index(&mut self, block_hash: BlockHash) -> Result<(), S::Err> {
         let transactions = self.check_btc_block_with_hash(block_hash.clone());
+        transactions
+            .iter()
+            .map(|tx| {
+                // The bag should exists in the storage at this point, so we just confirm it.
+                self.bags_storage.update_confirm_bag(&tx.data.bag_id, tx.btc_outpoint.clone())
+            })
+            .collect::<Result<Vec<()>, B::Err>>().expect("TODO");
         transactions
             .into_iter()
             .map(|tx| self.bids_storage.store_record(tx))
