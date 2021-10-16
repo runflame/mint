@@ -32,7 +32,7 @@ impl<C: BitcoinClient, S: IndexStorage, B: BagStorage> Index<C, S, B> {
     }
 
     pub fn add_bag(&self, bag: BagId) -> Result<(), B::Err> {
-        self.bags_storage.insert_bag(bag)
+        self.bags_storage.insert_unconfirmed_bag(bag)
     }
 
     // TODO: better API for indexing
@@ -67,7 +67,7 @@ impl<C: BitcoinClient, S: IndexStorage, B: BagStorage> Index<C, S, B> {
             data: bid_data,
         };
         self.bags_storage
-            .insert_bag(bid.data.bag_id.clone())
+            .insert_unconfirmed_bag(bid.data.bag_id.clone())
             .unwrap();
         self.bids_storage.store_record(bid).unwrap();
         if response.info.blockheight.unwrap() as u64 > self.current_height {
@@ -233,7 +233,7 @@ pub struct ReorgInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bag_storage::BagHashSetStorage;
+    use crate::bag_storage::BagMemoryStorage;
     use crate::storage::memory::MemoryIndexStorage;
     use crate::test_utils::*;
     use std::cell::RefCell;
@@ -250,7 +250,7 @@ mod tests {
             blocks: blocks.clone(),
         };
         let storage = MemoryIndexStorage::new();
-        let bags = BagHashSetStorage::new();
+        let bags = BagMemoryStorage::new();
         let mut index = Index::new(client, storage, bags, None);
 
         index.add_bag([1; 32]).unwrap();
@@ -283,7 +283,7 @@ mod tests {
             blocks: blocks.clone(),
         };
 
-        let bags = BagHashSetStorage::new();
+        let bags = BagMemoryStorage::new();
         let storage = MemoryIndexStorage::new();
         let mut index = Index::new(client, storage, bags, None);
         blocks.borrow_mut().push(block2.clone());
@@ -342,7 +342,7 @@ mod tests {
             blocks: blocks.clone(),
         };
         let storage = MemoryIndexStorage::new();
-        let bags = BagHashSetStorage::new();
+        let bags = BagMemoryStorage::new();
         let mut index = Index::new(client, storage, bags, None);
 
         index.add_bag([1; 32]).unwrap();

@@ -38,3 +38,9 @@ impl BagProof {
         BagProof { outpoint, bag_id }
     }
 }
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub enum BagEntry {
+    Confirmed(BagProof),
+    Unconfirmed(BagId),
+}

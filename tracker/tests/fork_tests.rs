@@ -1,6 +1,6 @@
 mod utils;
 use bitcoincore_rpc::RpcApi;
-use tracker::bag_storage::BagHashSetStorage;
+use tracker::bag_storage::BagMemoryStorage;
 use tracker::bitcoin_client::BitcoinMintExt;
 use tracker::index::BagId;
 use tracker::storage::sqlite::SqliteIndexStorage;
@@ -90,7 +90,7 @@ fn test_reorg_longest_chain() {
     };
 
     // Track chain on node1.
-    let bags = BagHashSetStorage::new();
+    let bags = BagMemoryStorage::new();
     let mut index = Index::new(client1, storage, bags, Some(HEIGHT_BEFORE_FORK - 1));
 
     // Tracker has no access to the chain #2, so it cannot prove bags 2_2 and 3_2 now.

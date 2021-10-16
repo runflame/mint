@@ -1,66 +1,18 @@
+mod memory;
+
+pub use memory::{BagMemoryStorage, BagMemoryStorageError};
+
 use crate::index::BagId;
-use std::cell::RefCell;
-use std::collections::HashSet;
 use std::error::Error;
-use std::fmt::{Display, Formatter};
-use std::rc::Rc;
+use crate::record::{BagProof, Outpoint};
 
 pub trait BagStorage {
     type Err: Error;
-    fn insert_bag(&self, bag: BagId) -> Result<(), Self::Err>;
+    fn insert_unconfirmed_bag(&self, bag: BagId) -> Result<(), Self::Err>;
+    fn insert_confirmed_bag(&self, bag: BagProof) -> Result<(), Self::Err>;
+    fn update_confirm_bag(&self, bag: &BagId, outpoint: Outpoint) -> Result<(), Self::Err>;
     fn delete_bag(&self, bag: &BagId) -> Result<(), Self::Err>;
     fn is_bag_exists(&self, bag: &BagId) -> Result<bool, Self::Err>;
+    fn is_bag_confirmed(&self, bag: &BagId) -> Result<bool, Self::Err>;
     fn count_bags(&self) -> Result<u64, Self::Err>;
 }
-
-#[derive(Debug)]
-pub struct BagHashSetStorage {
-    map: Rc<RefCell<HashSet<BagId>>>,
-}
-
-impl BagHashSetStorage {
-    pub fn new() -> Self {
-        BagHashSetStorage {
-            map: Rc::new(RefCell::new(HashSet::new())),
-        }
-    }
-}
-
-impl BagStorage for BagHashSetStorage {
-    type Err = BagHashSetStorageError;
-
-    fn insert_bag(&self, bag: BagId) -> Result<(), Self::Err> {
-        self.map.borrow_mut().insert(bag);
-        Ok(())
-    }
-
-    fn delete_bag(&self, bag: &BagId) -> Result<(), Self::Err> {
-        match self.map.borrow_mut().remove(bag) {
-            true => Ok(()),
-            false => Err(BagHashSetStorageError::BagNotExists),
-        }
-    }
-
-    fn is_bag_exists(&self, bag: &BagId) -> Result<bool, Self::Err> {
-        Ok(self.map.borrow().contains(bag))
-    }
-
-    fn count_bags(&self) -> Result<u64, Self::Err> {
-        Ok(self.map.borrow().len() as u64)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum BagHashSetStorageError {
-    BagNotExists,
-}
-
-impl Display for BagHashSetStorageError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            BagHashSetStorageError::BagNotExists => f.write_str("Bag does not exists."),
-        }
-    }
-}
-
-impl Error for BagHashSetStorageError {}
