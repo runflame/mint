@@ -1,5 +1,5 @@
 use crate::record::{BidEntry, BidEntryData, Outpoint};
-use crate::storage::IndexStorage;
+use crate::storage::BidStorage;
 use bitcoin::hashes::Hash;
 use bitcoin::BlockHash;
 use bitcoin::Txid;
@@ -43,7 +43,7 @@ impl SqliteIndexStorage {
     }
 }
 
-impl IndexStorage for SqliteIndexStorage {
+impl BidStorage for SqliteIndexStorage {
     type Err = rusqlite::Error;
 
     fn store_record(&self, record: BidEntry) -> Result<(), Self::Err> {

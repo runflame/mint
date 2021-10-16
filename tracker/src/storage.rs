@@ -3,4 +3,4 @@ pub mod memory;
 #[cfg(feature = "sqlite-storage")]
 pub mod sqlite;
 
-pub use def::IndexStorage;
+pub use def::BidStorage;

@@ -4,7 +4,7 @@ use tracker::bag_storage::BagMemoryStorage;
 use tracker::bitcoin_client::BitcoinMintExt;
 use tracker::index::BagId;
 use tracker::storage::sqlite::SqliteIndexStorage;
-use tracker::storage::IndexStorage;
+use tracker::storage::BidStorage;
 use tracker::Index;
 use utils::*;
 

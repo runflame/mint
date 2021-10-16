@@ -3,7 +3,7 @@ use crate::record::BidEntry;
 use bitcoin::BlockHash;
 use std::error::Error;
 
-pub trait IndexStorage {
+pub trait BidStorage {
     type Err: Error;
     fn store_record(&self, record: BidEntry) -> Result<(), Self::Err>;
     fn get_blocks_count(&self) -> Result<u64, Self::Err>;

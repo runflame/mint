@@ -1,5 +1,5 @@
 use crate::record::BidEntry;
-use crate::storage::IndexStorage;
+use crate::storage::BidStorage;
 use bitcoin::BlockHash;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -14,7 +14,7 @@ impl MemoryIndexStorage {
     }
 }
 
-impl IndexStorage for MemoryIndexStorage {
+impl BidStorage for MemoryIndexStorage {
     type Err = Infallible;
 
     fn store_record(&self, record: BidEntry) -> Result<(), Self::Err> {

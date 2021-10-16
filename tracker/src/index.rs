@@ -1,14 +1,14 @@
 use crate::bag_storage::BagStorage;
 use crate::bitcoin_client::BitcoinClient;
 use crate::record::{BagProof, BidEntry, BidEntryData, Outpoint};
-use crate::storage::IndexStorage;
+use crate::storage::BidStorage;
 use bitcoin::{BlockHash, Transaction, TxOut};
 use bitcoincore_rpc::json::GetBlockHeaderResult;
 use std::convert::TryFrom;
 
 pub type BagId = [u8; 32];
 
-pub struct Index<C: BitcoinClient, S: IndexStorage, B: BagStorage> {
+pub struct Index<C: BitcoinClient, S: BidStorage, B: BagStorage> {
     btc_client: C,
     bids_storage: S,
     bags_storage: B,
@@ -17,7 +17,7 @@ pub struct Index<C: BitcoinClient, S: IndexStorage, B: BagStorage> {
     current_tip: BlockHash,
 }
 
-impl<C: BitcoinClient, S: IndexStorage, B: BagStorage> Index<C, S, B> {
+impl<C: BitcoinClient, S: BidStorage, B: BagStorage> Index<C, S, B> {
     pub fn new(client: C, storage: S, bags: B, base_height: Option<u64>) -> Self {
         let info = client.get_blockchain_info().unwrap();
         let height = base_height.unwrap_or(info.blocks);
@@ -52,7 +52,7 @@ impl<C: BitcoinClient, S: IndexStorage, B: BagStorage> Index<C, S, B> {
     }
 }
 
-impl<C: BitcoinClient, S: IndexStorage, B: BagStorage> Index<C, S, B> {
+impl<C: BitcoinClient, S: BidStorage, B: BagStorage> Index<C, S, B> {
     /// Check existence of the bid in the bitcoin chain, and if it is then add it to the store
     pub fn add_bid(&mut self, proof: BagProof) -> Result<(), ()> {
         let response = self

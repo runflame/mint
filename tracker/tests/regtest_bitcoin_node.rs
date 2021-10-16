@@ -7,7 +7,7 @@ use tracker::bag_storage::BagMemoryStorage;
 use tracker::bitcoin_client::BitcoinMintExt;
 use tracker::storage::memory::MemoryIndexStorage;
 use tracker::storage::sqlite::SqliteIndexStorage;
-use tracker::storage::IndexStorage;
+use tracker::storage::BidStorage;
 use tracker::Index;
 
 const GENERATED_BLOCKS: u64 = 120;
@@ -26,7 +26,7 @@ fn regtest_bitcoin_node_sqlite_storage() {
     );
 }
 
-fn test_new_blocks_with_mint_txs<S: IndexStorage>(storage: S, dir: &str, offset: u32) {
+fn test_new_blocks_with_mint_txs<S: BidStorage>(storage: S, dir: &str, offset: u32) {
     let (_dir, _child, client, address) = init_client(dir, GENERATED_BLOCKS, offset);
 
     // create mint transaction
