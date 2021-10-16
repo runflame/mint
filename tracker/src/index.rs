@@ -1,6 +1,6 @@
 use crate::bag_storage::BagStorage;
 use crate::bitcoin_client::BitcoinClient;
-use crate::record::{BagEntry, BagEntryData, BagProof, Outpoint};
+use crate::record::{BidEntry, BidEntryData, BagProof, Outpoint};
 use crate::storage::IndexStorage;
 use bitcoin::{BlockHash, Transaction, TxOut};
 use bitcoincore_rpc::json::GetBlockHeaderResult;
@@ -61,7 +61,7 @@ impl<C: BitcoinClient, S: IndexStorage, B: BagStorage> Index<C, S, B> {
             .unwrap();
         let tx = response.transaction().unwrap();
         let bid_data = parse_mint_transaction_btc_block(&tx, proof.outpoint.out_pos).unwrap();
-        let bid = BagEntry {
+        let bid = BidEntry {
             btc_block: response.info.blockhash.unwrap(),
             btc_outpoint: proof.outpoint,
             data: bid_data,
@@ -154,7 +154,7 @@ impl<C: BitcoinClient, S: IndexStorage, B: BagStorage> Index<C, S, B> {
         Ok(())
     }
 
-    fn check_btc_block_with_hash(&self, hash: BlockHash) -> Vec<BagEntry> {
+    fn check_btc_block_with_hash(&self, hash: BlockHash) -> Vec<BidEntry> {
         let block = self.btc_client.get_block(&hash).unwrap();
         let txs = block.txdata;
 
@@ -168,7 +168,7 @@ impl<C: BitcoinClient, S: IndexStorage, B: BagStorage> Index<C, S, B> {
                             .is_bag_exists(&bid_data.bag_id)
                             .unwrap_or(false);
                         if bag_exists {
-                            Some(BagEntry {
+                            Some(BidEntry {
                                 btc_block: hash,
                                 btc_outpoint: outpoint,
                                 data: bid_data,
@@ -185,14 +185,14 @@ impl<C: BitcoinClient, S: IndexStorage, B: BagStorage> Index<C, S, B> {
     }
 }
 
-fn parse_mint_transaction_btc_block(tx: &Transaction, out_pos: u64) -> Option<BagEntryData> {
+fn parse_mint_transaction_btc_block(tx: &Transaction, out_pos: u64) -> Option<BidEntryData> {
     let output = tx.output.get(out_pos as usize)?;
     parse_mint_btc_output(output)
 }
 
 fn parse_mint_transaction_btc_block_unknown_pos(
     tx: Transaction,
-) -> impl Iterator<Item = (Outpoint, BagEntryData)> {
+) -> impl Iterator<Item = (Outpoint, BidEntryData)> {
     let txid = tx.txid();
     tx.output
         .into_iter()
@@ -208,13 +208,13 @@ fn parse_mint_transaction_btc_block_unknown_pos(
         })
 }
 
-fn parse_mint_btc_output(out: &TxOut) -> Option<BagEntryData> {
+fn parse_mint_btc_output(out: &TxOut) -> Option<BidEntryData> {
     match out.script_pubkey.is_v0_p2wsh() {
         true => {
             let bag_id = BagId::try_from(&out.script_pubkey.as_bytes()[2..34])
                 .expect("Script is in p2wsh form");
             let amount = out.value;
-            Some(BagEntryData { bag_id, amount })
+            Some(BidEntryData { bag_id, amount })
         }
         false => None,
     }
@@ -301,14 +301,14 @@ mod tests {
         assert_eq!(txs_in_index.len(), 2);
         assert_eq!(
             txs_in_index[0].data,
-            BagEntryData {
+            BidEntryData {
                 bag_id: [1; 32],
                 amount: 10
             }
         );
         assert_eq!(
             txs_in_index[1].data,
-            BagEntryData {
+            BidEntryData {
                 bag_id: [2; 32],
                 amount: 10
             }

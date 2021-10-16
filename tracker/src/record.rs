@@ -2,10 +2,10 @@ use crate::index::BagId;
 use bitcoin::{BlockHash, Txid};
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct BagEntry {
+pub struct BidEntry {
     pub btc_block: BlockHash,
     pub btc_outpoint: Outpoint,
-    pub data: BagEntryData,
+    pub data: BidEntryData,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -21,7 +21,7 @@ impl Outpoint {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct BagEntryData {
+pub struct BidEntryData {
     pub bag_id: BagId,
     pub amount: u64,
 }

@@ -1,4 +1,4 @@
-use crate::record::{BagEntry, BagEntryData, Outpoint};
+use crate::record::{BidEntry, BidEntryData, Outpoint};
 use crate::storage::IndexStorage;
 use bitcoin::hashes::Hash;
 use bitcoin::BlockHash;
@@ -46,7 +46,7 @@ impl SqliteIndexStorage {
 impl IndexStorage for SqliteIndexStorage {
     type Err = rusqlite::Error;
 
-    fn store_record(&self, record: BagEntry) -> Result<(), Self::Err> {
+    fn store_record(&self, record: BidEntry) -> Result<(), Self::Err> {
         self.connection.execute(
             "INSERT INTO records VALUES (?1, ?2, ?3, ?4, ?5);",
             rusqlite::params![
@@ -71,13 +71,13 @@ impl IndexStorage for SqliteIndexStorage {
         Ok(())
     }
 
-    fn get_records_by_block_hash(&self, hash: &BlockHash) -> Result<Vec<BagEntry>, Self::Err> {
+    fn get_records_by_block_hash(&self, hash: &BlockHash) -> Result<Vec<BidEntry>, Self::Err> {
         let mut stmt = self.connection.prepare(
             "SELECT block, txid, out_pos, bag_id, amount FROM records WHERE block = ?1;",
         )?;
 
         let res = stmt.query_map([hash.as_ref()], |row| {
-            Ok(BagEntry {
+            Ok(BidEntry {
                 btc_block: {
                     let vec: Vec<u8> = row.get(0)?;
                     BlockHash::from_slice(&vec).expect("TODO: handle the error")
@@ -89,7 +89,7 @@ impl IndexStorage for SqliteIndexStorage {
                     },
                     out_pos: row.get(2)?,
                 },
-                data: BagEntryData {
+                data: BidEntryData {
                     bag_id: {
                         let vec: Vec<u8> = row.get(3)?;
                         TryFrom::try_from(vec.as_slice()).expect("TODO: handle the error")
@@ -112,7 +112,7 @@ impl IndexStorage for SqliteIndexStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::record::BagEntryData;
+    use crate::record::BidEntryData;
     use bitcoin::Txid;
 
     #[test]
@@ -142,14 +142,14 @@ mod tests {
         out_pos: u64,
         bag_id: [u8; 32],
         amount: u64,
-    ) -> BagEntry {
-        BagEntry {
+    ) -> BidEntry {
+        BidEntry {
             btc_block: BlockHash::hash(&block),
             btc_outpoint: Outpoint {
                 txid: Txid::hash(&txid),
                 out_pos,
             },
-            data: BagEntryData { bag_id, amount },
+            data: BidEntryData { bag_id, amount },
         }
     }
 }
