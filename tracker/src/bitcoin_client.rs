@@ -1,9 +1,10 @@
 use crate::index::BagId;
+use crate::record::{BagProof, Outpoint};
 use bitcoin::blockdata::script;
 use bitcoin::consensus::Encodable;
 use bitcoin::{Block, BlockHash, Transaction, TxOut, Txid, WScriptHash};
 use bitcoincore_rpc::json::{
-    FundRawTransactionResult, GetBlockHeaderResult, GetBlockchainInfoResult,
+    FundRawTransactionResult, GetBlockHeaderResult, GetBlockchainInfoResult, GetTransactionResult,
     SignRawTransactionResult,
 };
 use bitcoincore_rpc::{RawTx, RpcApi};
@@ -22,6 +23,7 @@ pub trait BitcoinClient {
         tx: R,
     ) -> Result<SignRawTransactionResult, Self::Err>;
     fn send_raw_transaction<R: RawTx>(&self, tx: R) -> Result<Txid, Self::Err>;
+    fn get_transaction(&self, tx: &Txid) -> Result<GetTransactionResult, Self::Err>;
 }
 
 impl BitcoinClient for bitcoincore_rpc::Client {
@@ -57,10 +59,14 @@ impl BitcoinClient for bitcoincore_rpc::Client {
     fn send_raw_transaction<R: RawTx>(&self, tx: R) -> Result<Txid, Self::Err> {
         RpcApi::send_raw_transaction(self, tx)
     }
+
+    fn get_transaction(&self, tx: &Txid) -> Result<GetTransactionResult, Self::Err> {
+        RpcApi::get_transaction(self, tx, None)
+    }
 }
 
 pub trait BitcoinMintExt: BitcoinClient {
-    fn send_mint_transaction(&self, satoshies: u64, bag_id: &BagId) -> Result<Txid, Self::Err> {
+    fn send_mint_transaction(&self, satoshies: u64, bag_id: &BagId) -> Result<BagProof, Self::Err> {
         use bitcoin::hashes::sha256;
         use bitcoin::hashes::Hash;
 
@@ -82,8 +88,32 @@ pub trait BitcoinMintExt: BitcoinClient {
         let funded = self.fund_raw_transaction(&bytes)?;
         let signed = self.sign_raw_transaction_with_wallet(&funded.hex)?;
 
-        self.send_raw_transaction(&signed.hex)
+        let txid = self.send_raw_transaction(&signed.hex)?;
+
+        let raw_signed_tx = signed.transaction().expect("Bitcoin node accept it");
+        let out_pos = find_out_pos_mint_tx(&raw_signed_tx, bag_id);
+
+        Ok(BagProof::new(Outpoint::new(txid, out_pos), bag_id.clone()))
     }
+}
+
+// Bitcoin node does not guarantee that change of outputs does not change, so we must find bid
+// output from signed transaction
+fn find_out_pos_mint_tx(tx: &Transaction, bag: &BagId) -> u64 {
+    tx.output
+        .iter()
+        .enumerate()
+        .find_map(|(i, out)| match out.script_pubkey.is_v0_p2wsh() {
+            true => {
+                if &out.script_pubkey.as_bytes()[2..34] == bag {
+                    Some(i as u64)
+                } else {
+                    None
+                }
+            }
+            false => None,
+        })
+        .unwrap()
 }
 
 impl<T: BitcoinClient> BitcoinMintExt for T {}

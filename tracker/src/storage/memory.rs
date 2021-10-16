@@ -1,4 +1,4 @@
-use crate::record::Record;
+use crate::record::BagEntry;
 use crate::storage::IndexStorage;
 use bitcoin::BlockHash;
 use std::cell::RefCell;
@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::convert::Infallible;
 
 #[derive(Debug)]
-pub struct MemoryIndexStorage(RefCell<HashMap<BlockHash, Vec<Record>>>);
+pub struct MemoryIndexStorage(RefCell<HashMap<BlockHash, Vec<BagEntry>>>);
 
 impl MemoryIndexStorage {
     pub fn new() -> Self {
@@ -17,9 +17,9 @@ impl MemoryIndexStorage {
 impl IndexStorage for MemoryIndexStorage {
     type Err = Infallible;
 
-    fn store_record(&self, record: Record) -> Result<(), Self::Err> {
+    fn store_record(&self, record: BagEntry) -> Result<(), Self::Err> {
         let mut this = self.0.borrow_mut();
-        let vec = this.entry(record.bitcoin_block).or_default();
+        let vec = this.entry(record.btc_block).or_default();
         vec.push(record);
         Ok(())
     }
@@ -33,7 +33,7 @@ impl IndexStorage for MemoryIndexStorage {
         Ok(())
     }
 
-    fn get_records_by_block_hash(&self, hash: &BlockHash) -> Result<Vec<Record>, Self::Err> {
+    fn get_records_by_block_hash(&self, hash: &BlockHash) -> Result<Vec<BagEntry>, Self::Err> {
         let this = self.0.borrow();
         let records = this.get(hash).map(Clone::clone).unwrap();
         Ok(records)

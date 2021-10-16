@@ -2,15 +2,39 @@ use crate::index::BagId;
 use bitcoin::{BlockHash, Txid};
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct Record {
-    pub bitcoin_block: BlockHash,
-    pub bitcoin_tx_id: Txid,
-    pub bitcoin_output_position: u64,
-    pub data: RecordData,
+pub struct BagEntry {
+    pub btc_block: BlockHash,
+    pub btc_outpoint: Outpoint,
+    pub data: BagEntryData,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct RecordData {
+pub struct Outpoint {
+    pub txid: Txid,
+    pub out_pos: u64,
+}
+
+impl Outpoint {
+    pub fn new(txid: Txid, out_pos: u64) -> Self {
+        Outpoint { txid, out_pos }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct BagEntryData {
     pub bag_id: BagId,
     pub amount: u64,
+}
+
+// TODO: naming
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct BagProof {
+    pub outpoint: Outpoint,
+    pub bag_id: BagId,
+}
+
+impl BagProof {
+    pub fn new(outpoint: Outpoint, bag_id: [u8; 32]) -> Self {
+        BagProof { outpoint, bag_id }
+    }
 }

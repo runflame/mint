@@ -3,6 +3,7 @@ mod utils;
 use crate::utils::generate_block;
 use crate::utils::init_client;
 
+use tracker::bag_storage::BagHashSetStorage;
 use tracker::bitcoin_client::BitcoinMintExt;
 use tracker::storage::memory::MemoryIndexStorage;
 use tracker::storage::sqlite::SqliteIndexStorage;
@@ -29,17 +30,15 @@ fn test_new_blocks_with_mint_txs<S: IndexStorage>(storage: S, dir: &str, offset:
     let (_dir, _child, client, address) = init_client(dir, GENERATED_BLOCKS, offset);
 
     // create mint transaction
-    let tx_id = client.send_mint_transaction(1000, &[1; 32]).unwrap();
-    let mint_block = generate_block(&client, &address, &tx_id);
+    let prf = client.send_mint_transaction(1000, &[1; 32]).unwrap();
+    let mint_block = generate_block(&client, &address, &prf.outpoint.txid);
 
-    let mut index = Index::new(client, storage, Some(119));
+    let bags = BagHashSetStorage::new();
+    let mut index = Index::new(client, storage, bags, Some(119));
 
-    index.check_last_btc_blocks();
+    index.add_bid(prf).unwrap();
 
-    index.add_bag([1; 32]);
-    index.validate_bags().unwrap();
-
-    assert_eq!(index.checked_btc_height(), GENERATED_BLOCKS + 1);
+    assert_eq!(*index.current_height(), GENERATED_BLOCKS + 1);
 
     let txs = index.get_storage();
     assert_eq!(txs.get_blocks_count().unwrap(), 1); // we have only one mint transaction

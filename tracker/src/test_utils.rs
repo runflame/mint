@@ -1,21 +1,25 @@
 use crate::bitcoin_client::BitcoinClient;
-use bitcoin::blockdata::{opcodes, script};
+use crate::record::{BagProof, Outpoint};
+use bitcoin::blockdata::script;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::{Block, BlockHash, BlockHeader, Transaction, TxOut, Txid, WScriptHash};
-use bitcoincore_rpc::bitcoincore_rpc_json::{FundRawTransactionResult, SignRawTransactionResult};
-use bitcoincore_rpc::json::GetBlockHeaderResult;
+use bitcoincore_rpc::bitcoincore_rpc_json::{
+    FundRawTransactionResult, GetTransactionResult, SignRawTransactionResult,
+};
 use bitcoincore_rpc::json::GetBlockchainInfoResult;
+use bitcoincore_rpc::json::{Bip125Replaceable, GetBlockHeaderResult, WalletTxInfo};
 use bitcoincore_rpc::RawTx;
 use std::cell::RefCell;
-use std::convert::Infallible;
+use std::convert::{Infallible, TryInto};
 use std::rc::Rc;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct TestBlock {
     pub height: u64,
     pub block_hash: BlockHash,
     pub in_main_chain: bool,
     pub txs: Vec<Transaction>,
+    pub prev: Option<BlockHash>,
 }
 
 pub struct TestBitcoinClient {
@@ -78,7 +82,7 @@ impl BitcoinClient for TestBitcoinClient {
             difficulty: 0.0,
             chainwork: vec![],
             n_tx: 0,
-            previous_block_hash: None,
+            previous_block_hash: block.prev,
             next_block_hash: None,
         })
     }
@@ -120,23 +124,44 @@ impl BitcoinClient for TestBitcoinClient {
     fn send_raw_transaction<R: RawTx>(&self, _tx: R) -> Result<Txid, Self::Err> {
         unimplemented!()
     }
-}
 
-pub fn create_test_block(height: u64, data: impl AsRef<[u8]>) -> TestBlock {
-    use bitcoin::hashes::sha256d;
-
-    TestBlock {
-        height,
-        block_hash: BlockHash::from_hash(sha256d::Hash::hash(data.as_ref())),
-        in_main_chain: true,
-        txs: vec![],
+    fn get_transaction(&self, txid: &Txid) -> Result<GetTransactionResult, Self::Err> {
+        self.blocks
+            .borrow()
+            .iter()
+            .find_map(|b| {
+                b.txs.iter().find_map(|tx| {
+                    if tx.txid() == *txid {
+                        Some(GetTransactionResult {
+                            info: WalletTxInfo {
+                                confirmations: 0,
+                                blockhash: Some(b.block_hash.clone()),
+                                blockindex: None,
+                                blocktime: None,
+                                blockheight: Some(b.height as u32),
+                                txid: Default::default(),
+                                time: 0,
+                                timereceived: 0,
+                                bip125_replaceable: Bip125Replaceable::Yes,
+                            },
+                            amount: Default::default(),
+                            fee: None,
+                            details: vec![],
+                            hex: bitcoin::consensus::encode::serialize(tx),
+                        })
+                    } else {
+                        None
+                    }
+                })
+            })
+            .ok_or_else(|| unreachable!("In tests we ensure that transactions exists"))
     }
 }
 
-pub fn create_test_block_with_mint_tx(
+pub fn create_test_block(
     height: u64,
     data: impl AsRef<[u8]>,
-    tx_data: impl AsRef<[u8]>,
+    prev: Option<BlockHash>,
 ) -> TestBlock {
     use bitcoin::hashes::sha256d;
 
@@ -144,12 +169,34 @@ pub fn create_test_block_with_mint_tx(
         height,
         block_hash: BlockHash::from_hash(sha256d::Hash::hash(data.as_ref())),
         in_main_chain: true,
-        txs: vec![create_test_mint_transaction(tx_data)],
+        txs: vec![],
+        prev,
     }
 }
 
-pub fn create_test_mint_transaction(tx_data: impl AsRef<[u8]>) -> Transaction {
-    Transaction {
+pub fn create_test_block_with_mint_tx(
+    height: u64,
+    data: impl AsRef<[u8]>,
+    prev: Option<BlockHash>,
+    tx_data: impl AsRef<[u8]>,
+) -> (TestBlock, BagProof) {
+    use bitcoin::hashes::sha256d;
+
+    let (tx, proof) = create_test_mint_transaction(tx_data);
+    (
+        TestBlock {
+            height,
+            block_hash: BlockHash::from_hash(sha256d::Hash::hash(data.as_ref())),
+            in_main_chain: true,
+            txs: vec![tx],
+            prev,
+        },
+        proof,
+    )
+}
+
+pub fn create_test_mint_transaction(tx_data: impl AsRef<[u8]>) -> (Transaction, BagProof) {
+    let tx = Transaction {
         version: 0,
         lock_time: 0,
         input: vec![],
@@ -159,5 +206,10 @@ pub fn create_test_mint_transaction(tx_data: impl AsRef<[u8]>) -> Transaction {
                 sha256::Hash::from_slice(tx_data.as_ref()).unwrap(),
             )),
         }],
-    }
+    };
+    let proof = BagProof::new(
+        Outpoint::new(tx.txid(), 0),
+        tx_data.as_ref().try_into().unwrap(),
+    );
+    (tx, proof)
 }

@@ -1,5 +1,6 @@
 mod utils;
 use bitcoincore_rpc::RpcApi;
+use tracker::bag_storage::BagHashSetStorage;
 use tracker::bitcoin_client::BitcoinMintExt;
 use tracker::index::BagId;
 use tracker::storage::sqlite::SqliteIndexStorage;
@@ -53,10 +54,10 @@ fn test_reorg_longest_chain() {
     wait!(client1.get_blockchain_info().unwrap().blocks == HEIGHT_BEFORE_FORK);
 
     // Both nodes have mint tx.
-    let tx_id = client1
+    let prf1_12 = client1
         .send_mint_transaction(SATOSHIES_TO_SEND, &BAG1_12)
         .unwrap();
-    let both_block = generate_block(&client1, &address1, &tx_id);
+    let both_block = generate_block(&client1, &address1, &prf1_12.outpoint.txid);
     // Wait before node2 receive block
     wait!(client2.get_blockchain_info().unwrap().best_block_hash == both_block);
 
@@ -65,36 +66,42 @@ fn test_reorg_longest_chain() {
     wait!(client1.get_network_info().unwrap().connections == 0);
 
     // Mine block with Bag2_1 on node 1.
-    let last_block_chain_1 = {
-        let tx_id = client1
+    let (last_block_chain_1, prf2_1) = {
+        let prf = client1
             .send_mint_transaction(SATOSHIES_TO_SEND, &BAG2_1)
             .unwrap();
-        generate_block(&client1, &address1, &tx_id)
+        (generate_block(&client1, &address1, &prf.outpoint.txid), prf)
     };
 
-    let (bag2_2block, bag3_2block) = {
+    let (bag2_2block, bag3_2block, prf2_2, prf3_2) = {
         // Mine block with Bag2_2 on node 2.
-        let tx_id = client2
+        let prf2 = client2
             .send_mint_transaction(SATOSHIES_TO_SEND, &BAG2_2)
             .unwrap();
-        let bag1block = generate_block(&client2, &address2, &tx_id);
+        let bag1block = generate_block(&client2, &address2, &prf2.outpoint.txid);
 
         // Mine block with Bag3_2 on node 2.
-        let tx_id = client2
+        let prf3 = client2
             .send_mint_transaction(SATOSHIES_TO_SEND, &BAG3_2)
             .unwrap();
-        let bag2block = generate_block(&client2, &address2, &tx_id);
+        let bag2block = generate_block(&client2, &address2, &prf3.outpoint.txid);
 
-        (bag1block, bag2block)
+        (bag1block, bag2block, prf2, prf3)
     };
 
     // Track chain on node1.
-    let mut index = Index::new(client1, storage, Some(HEIGHT_BEFORE_FORK - 1));
-    index.check_last_btc_blocks();
+    let bags = BagHashSetStorage::new();
+    let mut index = Index::new(client1, storage, bags, Some(HEIGHT_BEFORE_FORK - 1));
+
+    // Tracker has no access to the chain #2, so it cannot prove bags 2_2 and 3_2 now.
+    index.add_bid(prf1_12).unwrap();
+    index.add_bid(prf2_1).unwrap();
+    index.add_bag(prf2_2.bag_id).unwrap();
+    index.add_bag(prf3_2.bag_id).unwrap();
 
     // Check that node1 contains only 2 bags on chain #1.
     {
-        assert_eq!(index.checked_btc_height(), HEIGHT_CHAIN1);
+        assert_eq!(*index.current_height(), HEIGHT_CHAIN1);
 
         let store = index.get_storage();
         assert_eq!(store.get_blocks_count().unwrap(), 2);
@@ -112,11 +119,11 @@ fn test_reorg_longest_chain() {
     wait!(client1.get_blockchain_info().unwrap().blocks == HEIGHT_CHAIN2);
 
     // Tracker must find reorg there.
-    index.check_last_btc_blocks();
+    index.check_reorgs();
 
     // Check that reorg happened and chain #2 is main now.
     {
-        assert_eq!(index.checked_btc_height(), HEIGHT_CHAIN2);
+        assert_eq!(*index.current_height(), HEIGHT_CHAIN2);
 
         let store = index.get_storage();
         assert_eq!(store.get_blocks_count().unwrap(), 3);

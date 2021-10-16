@@ -1,3 +1,4 @@
+pub mod bag_storage;
 pub mod bitcoin_client;
 pub mod index;
 pub mod record;
