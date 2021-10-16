@@ -1,11 +1,11 @@
-use std::cell::RefCell;
-use std::rc::Rc;
+use crate::bag_storage::BagStorage;
 use crate::index::BagId;
 use crate::record::{BagEntry, BagProof, Outpoint};
+use std::cell::RefCell;
 use std::collections::HashMap;
-use crate::bag_storage::BagStorage;
-use std::fmt::{Display, Formatter};
 use std::error::Error;
+use std::fmt::{Display, Formatter};
+use std::rc::Rc;
 
 #[derive(Debug)]
 pub struct BagMemoryStorage {
@@ -24,18 +24,24 @@ impl BagStorage for BagMemoryStorage {
     type Err = BagMemoryStorageError;
 
     fn insert_unconfirmed_bag(&self, bag: BagId) -> Result<(), Self::Err> {
-        self.map.borrow_mut().insert(bag, BagEntry::Unconfirmed(bag));
+        self.map
+            .borrow_mut()
+            .insert(bag, BagEntry::Unconfirmed(bag));
         Ok(())
     }
 
     fn insert_confirmed_bag(&self, bag: BagProof) -> Result<(), Self::Err> {
-        self.map.borrow_mut().insert(bag.bag_id, BagEntry::Confirmed(bag));
+        self.map
+            .borrow_mut()
+            .insert(bag.bag_id, BagEntry::Confirmed(bag));
         Ok(())
     }
 
     fn update_confirm_bag(&self, bag: &BagId, outpoint: Outpoint) -> Result<(), Self::Err> {
         let mut this = self.map.borrow_mut();
-        let bag_entry = this.get_mut(bag).ok_or(BagMemoryStorageError::BagNotExists)?;
+        let bag_entry = this
+            .get_mut(bag)
+            .ok_or(BagMemoryStorageError::BagNotExists)?;
         *bag_entry = BagEntry::Confirmed(BagProof::new(outpoint, bag.clone()));
         Ok(())
     }

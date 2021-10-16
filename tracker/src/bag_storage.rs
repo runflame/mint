@@ -3,8 +3,8 @@ mod memory;
 pub use memory::{BagMemoryStorage, BagMemoryStorageError};
 
 use crate::index::BagId;
-use std::error::Error;
 use crate::record::{BagProof, Outpoint};
+use std::error::Error;
 
 pub trait BagStorage {
     type Err: Error;

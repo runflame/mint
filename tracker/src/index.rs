@@ -1,6 +1,6 @@
 use crate::bag_storage::BagStorage;
 use crate::bitcoin_client::BitcoinClient;
-use crate::record::{BidEntry, BidEntryData, BagProof, Outpoint};
+use crate::record::{BagProof, BidEntry, BidEntryData, Outpoint};
 use crate::storage::IndexStorage;
 use bitcoin::{BlockHash, Transaction, TxOut};
 use bitcoincore_rpc::json::GetBlockHeaderResult;
@@ -66,9 +66,7 @@ impl<C: BitcoinClient, S: IndexStorage, B: BagStorage> Index<C, S, B> {
             btc_outpoint: proof.outpoint.clone(),
             data: bid_data,
         };
-        self.bags_storage
-            .insert_confirmed_bag(proof)
-            .unwrap();
+        self.bags_storage.insert_confirmed_bag(proof).unwrap();
         self.bids_storage.store_record(bid).unwrap();
         if response.info.blockheight.unwrap() as u64 > self.current_height {
             self.current_height = response.info.blockheight.unwrap() as u64;
@@ -151,9 +149,11 @@ impl<C: BitcoinClient, S: IndexStorage, B: BagStorage> Index<C, S, B> {
             .iter()
             .map(|tx| {
                 // The bag should exists in the storage at this point, so we just confirm it.
-                self.bags_storage.update_confirm_bag(&tx.data.bag_id, tx.btc_outpoint.clone())
+                self.bags_storage
+                    .update_confirm_bag(&tx.data.bag_id, tx.btc_outpoint.clone())
             })
-            .collect::<Result<Vec<()>, B::Err>>().expect("TODO");
+            .collect::<Result<Vec<()>, B::Err>>()
+            .expect("TODO");
         transactions
             .into_iter()
             .map(|tx| self.bids_storage.store_record(tx))
