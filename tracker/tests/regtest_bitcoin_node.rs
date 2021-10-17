@@ -5,7 +5,9 @@ use crate::utils::init_client;
 
 use tracker::bag_storage::BagMemoryStorage;
 use tracker::bitcoin_client::BitcoinMintExt;
+use tracker::record::BagProof;
 use tracker::storage::memory::MemoryIndexStorage;
+#[cfg(feature = "sqlite-storage")]
 use tracker::storage::sqlite::SqliteIndexStorage;
 use tracker::storage::BidStorage;
 use tracker::Index;
@@ -18,6 +20,7 @@ fn regtest_bitcoin_node_memory_storage() {
 }
 
 #[test]
+#[cfg(feature = "sqlite-storage")]
 fn regtest_bitcoin_node_sqlite_storage() {
     test_new_blocks_with_mint_txs(
         SqliteIndexStorage::in_memory(),
@@ -30,13 +33,13 @@ fn test_new_blocks_with_mint_txs<S: BidStorage>(storage: S, dir: &str, offset: u
     let (_dir, _child, client, address) = init_client(dir, GENERATED_BLOCKS, offset);
 
     // create mint transaction
-    let prf = client.send_mint_transaction(1000, &[1; 32]).unwrap();
-    let mint_block = generate_block(&client, &address, &prf.outpoint.txid);
+    let bid_tx = client.send_mint_transaction(1000, &[1; 32]).unwrap();
+    let mint_block = generate_block(&client, &address, &bid_tx.outpoint.txid);
 
     let bags = BagMemoryStorage::new();
     let mut index = Index::new(client, storage, bags, Some(119));
 
-    index.add_bid(prf).unwrap();
+    index.add_bid(BagProof::new(mint_block, bid_tx)).unwrap();
 
     assert_eq!(*index.current_height(), GENERATED_BLOCKS + 1);
 
