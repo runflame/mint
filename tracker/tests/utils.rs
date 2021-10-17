@@ -99,6 +99,7 @@ impl Drop for KillBitcoind {
     }
 }
 
+#[allow(unused)]
 pub fn add_node_client(client: &Client, addr: &str) {
     let _: Value = client
         .call(
@@ -111,12 +112,14 @@ pub fn add_node_client(client: &Client, addr: &str) {
         .unwrap();
 }
 
+#[allow(unused)]
 pub fn disconnect_node_client(client: &Client, addr: &str) {
     let _: Value = client
         .call("disconnectnode", &[Value::String(addr.to_string())])
         .unwrap();
 }
 
+#[allow(unused)]
 pub fn wait_until(seconds: u64, condition: impl Fn() -> bool) -> bool {
     let instant = Instant::now();
     loop {
