@@ -1,6 +1,7 @@
 use crate::bag_storage::BagStorage;
 use crate::index::BagId;
-use crate::record::{BagEntry, BagProof, Outpoint};
+use crate::record::{BagEntry, BagProof, BidTx, Outpoint};
+use bitcoin::BlockHash;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::error::Error;
@@ -33,16 +34,22 @@ impl BagStorage for BagMemoryStorage {
     fn insert_confirmed_bag(&self, bag: BagProof) -> Result<(), Self::Err> {
         self.map
             .borrow_mut()
-            .insert(bag.bag_id, BagEntry::Confirmed(bag));
+            .insert(bag.bid_tx.bag_id, BagEntry::Confirmed(bag));
         Ok(())
     }
 
-    fn update_confirm_bag(&self, bag: &BagId, outpoint: Outpoint) -> Result<(), Self::Err> {
+    fn update_confirm_bag(
+        &self,
+        bag: &BagId,
+        btc_block: BlockHash,
+        outpoint: Outpoint,
+    ) -> Result<(), Self::Err> {
         let mut this = self.map.borrow_mut();
         let bag_entry = this
             .get_mut(bag)
             .ok_or(BagMemoryStorageError::BagNotExists)?;
-        *bag_entry = BagEntry::Confirmed(BagProof::new(outpoint, bag.clone()));
+        *bag_entry =
+            BagEntry::Confirmed(BagProof::new(btc_block, BidTx::new(outpoint, bag.clone())));
         Ok(())
     }
 

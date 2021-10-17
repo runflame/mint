@@ -2,7 +2,7 @@ use crate::bag_storage::BagStorage;
 use crate::bitcoin_client::BitcoinClient;
 use crate::record::{BagProof, BidEntry, BidEntryData, Outpoint};
 use crate::storage::BidStorage;
-use bitcoin::{BlockHash, Transaction, TxOut};
+use bitcoin::{Block, BlockHash, Transaction, TxOut, Txid};
 use bitcoincore_rpc::json::GetBlockHeaderResult;
 use std::convert::TryFrom;
 
@@ -55,23 +55,29 @@ impl<C: BitcoinClient, S: BidStorage, B: BagStorage> Index<C, S, B> {
 impl<C: BitcoinClient, S: BidStorage, B: BagStorage> Index<C, S, B> {
     /// Check existence of the bid in the bitcoin chain, and if it is then add it to the store
     pub fn add_bid(&mut self, proof: BagProof) -> Result<(), ()> {
-        let response = self
+        let block = self.btc_client.get_block(&proof.btc_block).unwrap();
+        let height = self
             .btc_client
-            .get_transaction(&proof.outpoint.txid)
-            .unwrap();
-        let tx = response.transaction().unwrap();
-        let bid_data = parse_mint_transaction_btc_block(&tx, proof.outpoint.out_pos).unwrap();
+            .get_block_header_info(&proof.btc_block)
+            .unwrap()
+            .height;
+
+        let tx = find_tx(block, &proof.bid_tx.outpoint.txid).unwrap();
+        let bid_data =
+            parse_mint_transaction_btc_block(&tx, proof.bid_tx.outpoint.out_pos).unwrap();
         let bid = BidEntry {
-            btc_block: response.info.blockhash.unwrap(),
-            btc_outpoint: proof.outpoint.clone(),
+            btc_block: proof.btc_block,
+            btc_outpoint: proof.bid_tx.outpoint.clone(),
             data: bid_data,
         };
+
+        if height as u64 > self.current_height {
+            self.current_height = height as u64;
+            self.current_tip = bid.btc_block;
+        }
+
         self.bags_storage.insert_confirmed_bag(proof).unwrap();
         self.bids_storage.store_record(bid).unwrap();
-        if response.info.blockheight.unwrap() as u64 > self.current_height {
-            self.current_height = response.info.blockheight.unwrap() as u64;
-            self.current_tip = response.info.blockhash.unwrap();
-        }
 
         Ok(())
     }
@@ -149,8 +155,11 @@ impl<C: BitcoinClient, S: BidStorage, B: BagStorage> Index<C, S, B> {
             .iter()
             .map(|tx| {
                 // The bag should exists in the storage at this point, so we just confirm it.
-                self.bags_storage
-                    .update_confirm_bag(&tx.data.bag_id, tx.btc_outpoint.clone())
+                self.bags_storage.update_confirm_bag(
+                    &tx.data.bag_id,
+                    block_hash.clone(),
+                    tx.btc_outpoint.clone(),
+                )
             })
             .collect::<Result<Vec<()>, B::Err>>()
             .expect("TODO");
@@ -190,6 +199,10 @@ impl<C: BitcoinClient, S: BidStorage, B: BagStorage> Index<C, S, B> {
 
         mint_txs
     }
+}
+
+fn find_tx(block: Block, txid: &Txid) -> Option<Transaction> {
+    block.txdata.into_iter().find(|tx| tx.txid() == *txid)
 }
 
 fn parse_mint_transaction_btc_block(tx: &Transaction, out_pos: u64) -> Option<BidEntryData> {
@@ -296,7 +309,9 @@ mod tests {
         blocks.borrow_mut().push(block2.clone());
 
         index.add_bid(prf1).unwrap();
-        index.add_bid(prf2).unwrap();
+        index
+            .add_bid(BagProof::new(block2.block_hash, prf2))
+            .unwrap();
         assert_eq!(index.bids_storage.get_blocks_count().unwrap(), 1);
 
         let mut txs_in_index = index

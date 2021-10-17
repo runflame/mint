@@ -1,10 +1,10 @@
 use crate::index::BagId;
-use crate::record::{BagProof, Outpoint};
+use crate::record::{BidTx, Outpoint};
 use bitcoin::blockdata::script;
 use bitcoin::consensus::Encodable;
 use bitcoin::{Block, BlockHash, Transaction, TxOut, Txid, WScriptHash};
 use bitcoincore_rpc::json::{
-    FundRawTransactionResult, GetBlockHeaderResult, GetBlockchainInfoResult, GetTransactionResult,
+    FundRawTransactionResult, GetBlockHeaderResult, GetBlockchainInfoResult,
     SignRawTransactionResult,
 };
 use bitcoincore_rpc::{RawTx, RpcApi};
@@ -23,7 +23,6 @@ pub trait BitcoinClient {
         tx: R,
     ) -> Result<SignRawTransactionResult, Self::Err>;
     fn send_raw_transaction<R: RawTx>(&self, tx: R) -> Result<Txid, Self::Err>;
-    fn get_transaction(&self, tx: &Txid) -> Result<GetTransactionResult, Self::Err>;
 }
 
 impl BitcoinClient for bitcoincore_rpc::Client {
@@ -59,14 +58,10 @@ impl BitcoinClient for bitcoincore_rpc::Client {
     fn send_raw_transaction<R: RawTx>(&self, tx: R) -> Result<Txid, Self::Err> {
         RpcApi::send_raw_transaction(self, tx)
     }
-
-    fn get_transaction(&self, tx: &Txid) -> Result<GetTransactionResult, Self::Err> {
-        RpcApi::get_transaction(self, tx, None)
-    }
 }
 
 pub trait BitcoinMintExt: BitcoinClient {
-    fn send_mint_transaction(&self, satoshies: u64, bag_id: &BagId) -> Result<BagProof, Self::Err> {
+    fn send_mint_transaction(&self, satoshies: u64, bag_id: &BagId) -> Result<BidTx, Self::Err> {
         use bitcoin::hashes::sha256;
         use bitcoin::hashes::Hash;
 
@@ -93,7 +88,7 @@ pub trait BitcoinMintExt: BitcoinClient {
         let raw_signed_tx = signed.transaction().expect("Bitcoin node accept it");
         let out_pos = find_out_pos_mint_tx(&raw_signed_tx, bag_id);
 
-        Ok(BagProof::new(Outpoint::new(txid, out_pos), bag_id.clone()))
+        Ok(BidTx::new(Outpoint::new(txid, out_pos), bag_id.clone()))
     }
 }
 

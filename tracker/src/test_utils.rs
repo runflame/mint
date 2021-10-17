@@ -1,13 +1,11 @@
 use crate::bitcoin_client::BitcoinClient;
-use crate::record::{BagProof, Outpoint};
+use crate::record::{BagProof, BidTx, Outpoint};
 use bitcoin::blockdata::script;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::{Block, BlockHash, BlockHeader, Transaction, TxOut, Txid, WScriptHash};
-use bitcoincore_rpc::bitcoincore_rpc_json::{
-    FundRawTransactionResult, GetTransactionResult, SignRawTransactionResult,
-};
+use bitcoincore_rpc::bitcoincore_rpc_json::{FundRawTransactionResult, SignRawTransactionResult};
+use bitcoincore_rpc::json::GetBlockHeaderResult;
 use bitcoincore_rpc::json::GetBlockchainInfoResult;
-use bitcoincore_rpc::json::{Bip125Replaceable, GetBlockHeaderResult, WalletTxInfo};
 use bitcoincore_rpc::RawTx;
 use std::cell::RefCell;
 use std::convert::{Infallible, TryInto};
@@ -124,38 +122,6 @@ impl BitcoinClient for TestBitcoinClient {
     fn send_raw_transaction<R: RawTx>(&self, _tx: R) -> Result<Txid, Self::Err> {
         unimplemented!()
     }
-
-    fn get_transaction(&self, txid: &Txid) -> Result<GetTransactionResult, Self::Err> {
-        self.blocks
-            .borrow()
-            .iter()
-            .find_map(|b| {
-                b.txs.iter().find_map(|tx| {
-                    if tx.txid() == *txid {
-                        Some(GetTransactionResult {
-                            info: WalletTxInfo {
-                                confirmations: 0,
-                                blockhash: Some(b.block_hash.clone()),
-                                blockindex: None,
-                                blocktime: None,
-                                blockheight: Some(b.height as u32),
-                                txid: Default::default(),
-                                time: 0,
-                                timereceived: 0,
-                                bip125_replaceable: Bip125Replaceable::Yes,
-                            },
-                            amount: Default::default(),
-                            fee: None,
-                            details: vec![],
-                            hex: bitcoin::consensus::encode::serialize(tx),
-                        })
-                    } else {
-                        None
-                    }
-                })
-            })
-            .ok_or_else(|| unreachable!("In tests we ensure that transactions exists"))
-    }
 }
 
 pub fn create_test_block(
@@ -182,20 +148,19 @@ pub fn create_test_block_with_mint_tx(
 ) -> (TestBlock, BagProof) {
     use bitcoin::hashes::sha256d;
 
-    let (tx, proof) = create_test_mint_transaction(tx_data);
-    (
-        TestBlock {
-            height,
-            block_hash: BlockHash::from_hash(sha256d::Hash::hash(data.as_ref())),
-            in_main_chain: true,
-            txs: vec![tx],
-            prev,
-        },
-        proof,
-    )
+    let (tx, bid_tx) = create_test_mint_transaction(tx_data);
+    let block = TestBlock {
+        height,
+        block_hash: BlockHash::from_hash(sha256d::Hash::hash(data.as_ref())),
+        in_main_chain: true,
+        txs: vec![tx],
+        prev,
+    };
+    let prf = BagProof::new(block.block_hash, bid_tx);
+    (block, prf)
 }
 
-pub fn create_test_mint_transaction(tx_data: impl AsRef<[u8]>) -> (Transaction, BagProof) {
+pub fn create_test_mint_transaction(tx_data: impl AsRef<[u8]>) -> (Transaction, BidTx) {
     let tx = Transaction {
         version: 0,
         lock_time: 0,
@@ -207,9 +172,9 @@ pub fn create_test_mint_transaction(tx_data: impl AsRef<[u8]>) -> (Transaction, 
             )),
         }],
     };
-    let proof = BagProof::new(
+    let bid_tx = BidTx::new(
         Outpoint::new(tx.txid(), 0),
         tx_data.as_ref().try_into().unwrap(),
     );
-    (tx, proof)
+    (tx, bid_tx)
 }

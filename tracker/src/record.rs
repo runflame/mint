@@ -29,13 +29,25 @@ pub struct BidEntryData {
 // TODO: naming
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct BagProof {
+    pub btc_block: BlockHash,
+    pub bid_tx: BidTx,
+}
+
+impl BagProof {
+    pub fn new(btc_block: BlockHash, bid_tx: BidTx) -> Self {
+        BagProof { btc_block, bid_tx }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct BidTx {
     pub outpoint: Outpoint,
     pub bag_id: BagId,
 }
 
-impl BagProof {
+impl BidTx {
     pub fn new(outpoint: Outpoint, bag_id: [u8; 32]) -> Self {
-        BagProof { outpoint, bag_id }
+        BidTx { outpoint, bag_id }
     }
 }
 
