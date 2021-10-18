@@ -1,4 +1,4 @@
-use crate::bitcoin_client::BitcoinClient;
+use crate::bitcoin_client::{BitcoinClient, ClientError};
 use crate::record::{BidProof, BidTx, Outpoint};
 use bitcoin::blockdata::script;
 use bitcoin::hashes::{sha256, Hash};
@@ -27,7 +27,7 @@ pub struct TestBitcoinClient {
 impl BitcoinClient for TestBitcoinClient {
     type Err = Infallible;
 
-    fn get_blockchain_info(&self) -> Result<GetBlockchainInfoResult, Self::Err> {
+    fn get_blockchain_info(&self) -> Result<GetBlockchainInfoResult, ClientError<Self::Err>> {
         let blocks = self.blocks.borrow();
         Ok(GetBlockchainInfoResult {
             chain: "rusttest".to_string(),
@@ -49,7 +49,7 @@ impl BitcoinClient for TestBitcoinClient {
         })
     }
 
-    fn get_block_hash(&self, height: u64) -> Result<BlockHash, Self::Err> {
+    fn get_block_hash(&self, height: u64) -> Result<BlockHash, ClientError<Self::Err>> {
         Ok(self
             .blocks
             .borrow()
@@ -59,7 +59,10 @@ impl BitcoinClient for TestBitcoinClient {
             .block_hash)
     }
 
-    fn get_block_header_info(&self, hash: &BlockHash) -> Result<GetBlockHeaderResult, Self::Err> {
+    fn get_block_header_info(
+        &self,
+        hash: &BlockHash,
+    ) -> Result<GetBlockHeaderResult, ClientError<Self::Err>> {
         let blocks = self.blocks.borrow();
         let index = blocks
             .iter()
@@ -85,7 +88,7 @@ impl BitcoinClient for TestBitcoinClient {
         })
     }
 
-    fn get_block(&self, hash: &BlockHash) -> Result<Block, Self::Err> {
+    fn get_block(&self, hash: &BlockHash) -> Result<Block, ClientError<Self::Err>> {
         let blocks = self.blocks.borrow();
         let index = blocks
             .iter()
@@ -108,18 +111,18 @@ impl BitcoinClient for TestBitcoinClient {
     fn fund_raw_transaction<R: RawTx>(
         &self,
         _tx: R,
-    ) -> Result<FundRawTransactionResult, Self::Err> {
+    ) -> Result<FundRawTransactionResult, ClientError<Self::Err>> {
         unimplemented!()
     }
 
     fn sign_raw_transaction_with_wallet<R: RawTx>(
         &self,
         _tx: R,
-    ) -> Result<SignRawTransactionResult, Self::Err> {
+    ) -> Result<SignRawTransactionResult, ClientError<Self::Err>> {
         unimplemented!()
     }
 
-    fn send_raw_transaction<R: RawTx>(&self, _tx: R) -> Result<Txid, Self::Err> {
+    fn send_raw_transaction<R: RawTx>(&self, _tx: R) -> Result<Txid, ClientError<Self::Err>> {
         unimplemented!()
     }
 }

@@ -97,7 +97,7 @@ fn test_reorg_longest_chain() {
     };
 
     // Track chain on node1.
-    let mut index = Index::new(client1, storage, Some(HEIGHT_BEFORE_FORK - 1));
+    let mut index = Index::new(client1, storage, Some(HEIGHT_BEFORE_FORK - 1)).unwrap();
 
     // Tracker has no access to the chain #2, so it cannot prove bags 2_2 and 3_2 now.
     index.add_bid(prf1_12).unwrap();
@@ -125,7 +125,7 @@ fn test_reorg_longest_chain() {
     wait!(client1.get_blockchain_info().unwrap().blocks == HEIGHT_CHAIN2);
 
     // Tracker must find reorg there.
-    index.check_reorgs();
+    index.check_reorgs().unwrap();
 
     // Check that reorg happened and chain #2 is main now.
     {

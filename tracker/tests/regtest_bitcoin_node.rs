@@ -35,7 +35,7 @@ fn test_new_blocks_with_mint_txs<S: BidStorage>(storage: S, dir: &str, offset: u
     let bid_tx = client.send_mint_transaction(1000, &[1; 32]).unwrap();
     let mint_block = generate_block(&client, &address, &bid_tx.outpoint.txid);
 
-    let mut index = Index::new(client, storage, Some(119));
+    let mut index = Index::new(client, storage, Some(119)).unwrap();
 
     index.add_bid(BidProof::new(mint_block, bid_tx)).unwrap();
 
