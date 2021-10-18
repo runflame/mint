@@ -10,6 +10,7 @@ sqlite-storage = ["rusqlite"]
 [dependencies]
 bitcoin = "0.26.1"
 bitcoincore-rpc = "0.13.0"
+thiserror = "1.0.30"
 rusqlite = { version = "0.25.3", features = ["bundled", "blob"], optional = true }
 
 [dev-dependencies]

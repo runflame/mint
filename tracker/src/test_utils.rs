@@ -1,5 +1,5 @@
 use crate::bitcoin_client::BitcoinClient;
-use crate::record::{BagProof, BidTx, Outpoint};
+use crate::record::{BidProof, BidTx, Outpoint};
 use bitcoin::blockdata::script;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::{Block, BlockHash, BlockHeader, Transaction, TxOut, Txid, WScriptHash};
@@ -145,7 +145,7 @@ pub fn create_test_block_with_mint_tx(
     data: impl AsRef<[u8]>,
     prev: Option<BlockHash>,
     tx_data: impl AsRef<[u8]>,
-) -> (TestBlock, BagProof) {
+) -> (TestBlock, BidProof) {
     use bitcoin::hashes::sha256d;
 
     let (tx, bid_tx) = create_test_mint_transaction(tx_data);
@@ -156,7 +156,7 @@ pub fn create_test_block_with_mint_tx(
         txs: vec![tx],
         prev,
     };
-    let prf = BagProof::new(block.block_hash, bid_tx);
+    let prf = BidProof::new(block.block_hash, bid_tx);
     (block, prf)
 }
 

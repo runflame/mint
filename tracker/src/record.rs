@@ -1,11 +1,11 @@
 use crate::index::BagId;
 use bitcoin::{BlockHash, Txid};
+use std::hash::Hash;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct BidEntry {
-    pub btc_block: BlockHash,
-    pub btc_outpoint: Outpoint,
-    pub data: BidEntryData,
+    pub amount: u64,
+    pub proof: BidProof,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -26,16 +26,15 @@ pub struct BidEntryData {
     pub amount: u64,
 }
 
-// TODO: naming
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct BagProof {
+pub struct BidProof {
     pub btc_block: BlockHash,
-    pub bid_tx: BidTx,
+    pub tx: BidTx,
 }
 
-impl BagProof {
-    pub fn new(btc_block: BlockHash, bid_tx: BidTx) -> Self {
-        BagProof { btc_block, bid_tx }
+impl BidProof {
+    pub fn new(btc_block: BlockHash, tx: BidTx) -> Self {
+        BidProof { btc_block, tx }
     }
 }
 
@@ -49,10 +48,4 @@ impl BidTx {
     pub fn new(outpoint: Outpoint, bag_id: [u8; 32]) -> Self {
         BidTx { outpoint, bag_id }
     }
-}
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub enum BagEntry {
-    Confirmed(BagProof),
-    Unconfirmed(BagId),
 }

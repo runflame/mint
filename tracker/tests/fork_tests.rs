@@ -1,9 +1,8 @@
 mod utils;
 use bitcoincore_rpc::RpcApi;
-use tracker::bag_storage::BagMemoryStorage;
 use tracker::bitcoin_client::BitcoinMintExt;
 use tracker::index::BagId;
-use tracker::record::BagProof;
+use tracker::record::BidProof;
 use tracker::storage::memory::MemoryIndexStorage;
 use tracker::storage::BidStorage;
 use tracker::Index;
@@ -59,7 +58,7 @@ fn test_reorg_longest_chain() {
         .send_mint_transaction(SATOSHIES_TO_SEND, &BAG1_12)
         .unwrap();
     let both_block = generate_block(&client1, &address1, &bid1_12.outpoint.txid);
-    let prf1_12 = BagProof::new(both_block, bid1_12);
+    let prf1_12 = BidProof::new(both_block, bid1_12);
     // Wait before node2 receive block
     wait!(client2.get_blockchain_info().unwrap().best_block_hash == both_block);
 
@@ -73,7 +72,7 @@ fn test_reorg_longest_chain() {
             .send_mint_transaction(SATOSHIES_TO_SEND, &BAG2_1)
             .unwrap();
         let block = generate_block(&client1, &address1, &bid.outpoint.txid);
-        (block, BagProof::new(block, bid))
+        (block, BidProof::new(block, bid))
     };
 
     let (bag2_2block, bag3_2block, prf2_2, prf3_2) = {
@@ -92,20 +91,19 @@ fn test_reorg_longest_chain() {
         (
             bag1block,
             bag2block,
-            BagProof::new(bag1block, bid2),
-            BagProof::new(bag2block, bid3),
+            BidProof::new(bag1block, bid2),
+            BidProof::new(bag2block, bid3),
         )
     };
 
     // Track chain on node1.
-    let bags = BagMemoryStorage::new();
-    let mut index = Index::new(client1, storage, bags, Some(HEIGHT_BEFORE_FORK - 1));
+    let mut index = Index::new(client1, storage, Some(HEIGHT_BEFORE_FORK - 1));
 
     // Tracker has no access to the chain #2, so it cannot prove bags 2_2 and 3_2 now.
     index.add_bid(prf1_12).unwrap();
     index.add_bid(prf2_1).unwrap();
-    index.add_bag(prf2_2.bid_tx.bag_id).unwrap();
-    index.add_bag(prf3_2.bid_tx.bag_id).unwrap();
+    index.add_bag(prf2_2.tx.bag_id).unwrap();
+    index.add_bag(prf3_2.tx.bag_id).unwrap();
 
     // Check that node1 contains only 2 bags on chain #1.
     {
@@ -117,7 +115,7 @@ fn test_reorg_longest_chain() {
         let txs = store
             .get_records_by_block_hash(&last_block_chain_1)
             .unwrap();
-        assert_eq!(txs.last().unwrap().data.bag_id, BAG2_1);
+        assert_eq!(txs.last().unwrap().proof.tx.bag_id, BAG2_1);
     }
 
     // Reconnect node1 with node2.
@@ -137,9 +135,9 @@ fn test_reorg_longest_chain() {
         assert_eq!(store.get_blocks_count().unwrap(), 3);
 
         let txs = store.get_records_by_block_hash(&bag3_2block).unwrap();
-        assert_eq!(txs.last().unwrap().data.bag_id, BAG3_2);
+        assert_eq!(txs.last().unwrap().proof.tx.bag_id, BAG3_2);
 
         let txs = store.get_records_by_block_hash(&bag2_2block).unwrap();
-        assert_eq!(txs.last().unwrap().data.bag_id, BAG2_2);
+        assert_eq!(txs.last().unwrap().proof.tx.bag_id, BAG2_2);
     }
 }

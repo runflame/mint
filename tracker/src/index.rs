@@ -1,24 +1,22 @@
-use crate::bag_storage::BagStorage;
 use crate::bitcoin_client::BitcoinClient;
-use crate::record::{BagProof, BidEntry, BidEntryData, Outpoint};
-use crate::storage::BidStorage;
+use crate::record::{BidEntry, BidEntryData, BidProof, BidTx, Outpoint};
+use crate::storage::{BidStorage, BidStorageError};
 use bitcoin::{Block, BlockHash, Transaction, TxOut, Txid};
 use bitcoincore_rpc::json::GetBlockHeaderResult;
 use std::convert::TryFrom;
 
 pub type BagId = [u8; 32];
 
-pub struct Index<C: BitcoinClient, S: BidStorage, B: BagStorage> {
+pub struct Index<C: BitcoinClient, S: BidStorage> {
     btc_client: C,
     bids_storage: S,
-    bags_storage: B,
 
     current_height: u64,
     current_tip: BlockHash,
 }
 
-impl<C: BitcoinClient, S: BidStorage, B: BagStorage> Index<C, S, B> {
-    pub fn new(client: C, storage: S, bags: B, base_height: Option<u64>) -> Self {
+impl<C: BitcoinClient, S: BidStorage> Index<C, S> {
+    pub fn new(client: C, storage: S, base_height: Option<u64>) -> Self {
         let info = client.get_blockchain_info().unwrap();
         let height = base_height.unwrap_or(info.blocks);
         let tip = client.get_block_hash(height).unwrap();
@@ -27,12 +25,11 @@ impl<C: BitcoinClient, S: BidStorage, B: BagStorage> Index<C, S, B> {
             current_height: height,
             current_tip: tip,
             bids_storage: storage,
-            bags_storage: bags,
         }
     }
 
-    pub fn add_bag(&self, bag: BagId) -> Result<(), B::Err> {
-        self.bags_storage.insert_unconfirmed_bag(bag)
+    pub fn add_bag(&self, bag: BagId) -> Result<(), BidStorageError<S::Err>> {
+        self.bids_storage.insert_unconfirmed_bag(bag)
     }
 
     // TODO: better API for indexing
@@ -52,9 +49,9 @@ impl<C: BitcoinClient, S: BidStorage, B: BagStorage> Index<C, S, B> {
     }
 }
 
-impl<C: BitcoinClient, S: BidStorage, B: BagStorage> Index<C, S, B> {
+impl<C: BitcoinClient, S: BidStorage> Index<C, S> {
     /// Check existence of the bid in the bitcoin chain, and if it is then add it to the store
-    pub fn add_bid(&mut self, proof: BagProof) -> Result<(), ()> {
+    pub fn add_bid(&mut self, proof: BidProof) -> Result<(), ()> {
         let block = self.btc_client.get_block(&proof.btc_block).unwrap();
         let height = self
             .btc_client
@@ -62,22 +59,24 @@ impl<C: BitcoinClient, S: BidStorage, B: BagStorage> Index<C, S, B> {
             .unwrap()
             .height;
 
-        let tx = find_tx(block, &proof.bid_tx.outpoint.txid).unwrap();
-        let bid_data =
-            parse_mint_transaction_btc_block(&tx, proof.bid_tx.outpoint.out_pos).unwrap();
+        let tx = find_tx(block, &proof.tx.outpoint.txid).unwrap();
+        let bid_data = parse_mint_transaction_btc_block(&tx, proof.tx.outpoint.out_pos).unwrap();
+
+        if bid_data.bag_id != proof.tx.bag_id {
+            panic!("TODO")
+        }
+
         let bid = BidEntry {
-            btc_block: proof.btc_block,
-            btc_outpoint: proof.bid_tx.outpoint.clone(),
-            data: bid_data,
+            amount: bid_data.amount,
+            proof,
         };
 
         if height as u64 > self.current_height {
             self.current_height = height as u64;
-            self.current_tip = bid.btc_block;
+            self.current_tip = bid.proof.btc_block;
         }
 
-        self.bags_storage.insert_confirmed_bag(proof).unwrap();
-        self.bids_storage.store_record(bid).unwrap();
+        self.bids_storage.insert_bid(bid).unwrap();
 
         Ok(())
     }
@@ -152,24 +151,15 @@ impl<C: BitcoinClient, S: BidStorage, B: BagStorage> Index<C, S, B> {
         }
     }
 
-    fn add_btc_block_to_index(&mut self, block_hash: BlockHash) -> Result<(), S::Err> {
+    fn add_btc_block_to_index(
+        &mut self,
+        block_hash: BlockHash,
+    ) -> Result<(), BidStorageError<S::Err>> {
         let transactions = self.check_btc_block_with_hash(block_hash.clone());
         transactions
-            .iter()
-            .map(|tx| {
-                // The bag should exists in the storage at this point, so we just confirm it.
-                self.bags_storage.update_confirm_bag(
-                    &tx.data.bag_id,
-                    block_hash.clone(),
-                    tx.btc_outpoint.clone(),
-                )
-            })
-            .collect::<Result<Vec<()>, B::Err>>()
-            .expect("TODO");
-        transactions
             .into_iter()
-            .map(|tx| self.bids_storage.store_record(tx))
-            .collect::<Result<Vec<()>, S::Err>>()?;
+            .map(|bid| self.bids_storage.update_bid(bid))
+            .collect::<Result<Vec<()>, BidStorageError<S::Err>>>()?;
         Ok(())
     }
 
@@ -183,14 +173,19 @@ impl<C: BitcoinClient, S: BidStorage, B: BagStorage> Index<C, S, B> {
                 parse_mint_transaction_btc_block_unknown_pos(tx)
                     .filter_map(|(outpoint, bid_data)| {
                         let bag_exists = self
-                            .bags_storage
+                            .bids_storage
                             .is_bag_exists(&bid_data.bag_id)
                             .unwrap_or(false);
                         if bag_exists {
                             Some(BidEntry {
-                                btc_block: hash,
-                                btc_outpoint: outpoint,
-                                data: bid_data,
+                                amount: bid_data.amount,
+                                proof: BidProof {
+                                    btc_block: hash,
+                                    tx: BidTx {
+                                        outpoint,
+                                        bag_id: bid_data.bag_id,
+                                    },
+                                },
                             })
                         } else {
                             None
@@ -257,7 +252,6 @@ pub struct ReorgInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bag_storage::BagMemoryStorage;
     use crate::storage::memory::MemoryIndexStorage;
     use crate::test_utils::*;
     use std::cell::RefCell;
@@ -274,8 +268,7 @@ mod tests {
             blocks: blocks.clone(),
         };
         let storage = MemoryIndexStorage::new();
-        let bags = BagMemoryStorage::new();
-        let mut index = Index::new(client, storage, bags, None);
+        let mut index = Index::new(client, storage, None);
 
         index.add_bag([1; 32]).unwrap();
 
@@ -290,8 +283,8 @@ mod tests {
             .unwrap();
         let block2_tx_out = &txs_in_index[0];
 
-        assert_eq!(block2_tx_out.data.amount, 10);
-        assert_eq!(block2_tx_out.data.bag_id, [1; 32]);
+        assert_eq!(block2_tx_out.amount, 10);
+        assert_eq!(block2_tx_out.proof.tx.bag_id, [1; 32]);
     }
 
     #[test]
@@ -307,14 +300,13 @@ mod tests {
             blocks: blocks.clone(),
         };
 
-        let bags = BagMemoryStorage::new();
         let storage = MemoryIndexStorage::new();
-        let mut index = Index::new(client, storage, bags, None);
+        let mut index = Index::new(client, storage, None);
         blocks.borrow_mut().push(block2.clone());
 
         index.add_bid(prf1).unwrap();
         index
-            .add_bid(BagProof::new(block2.block_hash, prf2))
+            .add_bid(BidProof::new(block2.block_hash, prf2))
             .unwrap();
         assert_eq!(index.bids_storage.get_blocks_count().unwrap(), 1);
 
@@ -322,23 +314,11 @@ mod tests {
             .bids_storage
             .get_records_by_block_hash(&block2.block_hash)
             .unwrap();
-        txs_in_index.sort_by(|x, y| x.data.bag_id.cmp(&y.data.bag_id));
+        txs_in_index.sort_by(|x, y| x.proof.tx.bag_id.cmp(&y.proof.tx.bag_id));
 
         assert_eq!(txs_in_index.len(), 2);
-        assert_eq!(
-            txs_in_index[0].data,
-            BidEntryData {
-                bag_id: [1; 32],
-                amount: 10
-            }
-        );
-        assert_eq!(
-            txs_in_index[1].data,
-            BidEntryData {
-                bag_id: [2; 32],
-                amount: 10
-            }
-        );
+        assert_eq!(txs_in_index[0].proof.tx.bag_id, [1; 32]);
+        assert_eq!(txs_in_index[1].proof.tx.bag_id, [2; 32]);
     }
 
     #[test]
@@ -368,8 +348,7 @@ mod tests {
             blocks: blocks.clone(),
         };
         let storage = MemoryIndexStorage::new();
-        let bags = BagMemoryStorage::new();
-        let mut index = Index::new(client, storage, bags, None);
+        let mut index = Index::new(client, storage, None);
 
         index.add_bag([1; 32]).unwrap();
         index.add_bag([2; 32]).unwrap();
@@ -392,14 +371,14 @@ mod tests {
             .get_records_by_block_hash(&forked_block.block_hash)
             .unwrap();
         let forked_block_tx_out = &txs_in_index[0];
-        assert_eq!(forked_block_tx_out.data.bag_id, [2; 32]);
+        assert_eq!(forked_block_tx_out.proof.tx.bag_id, [2; 32]);
 
         let txs_in_index = index
             .bids_storage
             .get_records_by_block_hash(&forked_block2.block_hash)
             .unwrap();
         let forked_block2_tx_out = &txs_in_index[0];
-        assert_eq!(forked_block2_tx_out.data.bag_id, [3; 32]);
+        assert_eq!(forked_block2_tx_out.proof.tx.bag_id, [3; 32]);
     }
 
     #[test]
@@ -432,8 +411,7 @@ mod tests {
             blocks: blocks.clone(),
         };
         let storage = MemoryIndexStorage::new();
-        let bags = BagMemoryStorage::new();
-        let mut index = Index::new(client, storage, bags, None);
+        let mut index = Index::new(client, storage, None);
 
         index.add_bag([1; 32]).unwrap();
         index.add_bag([2; 32]).unwrap();
@@ -456,6 +434,6 @@ mod tests {
             .get_records_by_block_hash(&forked_block.block_hash)
             .unwrap();
         let forked_block_tx_out = &txs_in_index[0];
-        assert_eq!(forked_block_tx_out.data.bag_id, [1; 32]);
+        assert_eq!(forked_block_tx_out.proof.tx.bag_id, [1; 32]);
     }
 }
