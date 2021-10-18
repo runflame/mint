@@ -401,4 +401,61 @@ mod tests {
         let forked_block2_tx_out = &txs_in_index[0];
         assert_eq!(forked_block2_tx_out.data.bag_id, [3; 32]);
     }
+
+    #[test]
+    fn test_reorg_shorter_chain() {
+        let initial_block = create_test_block(0, [1], None);
+        let (forked_block, _prf1) =
+            create_test_block_with_mint_tx(1, [2], Some(initial_block.block_hash), [1; 32]);
+        let (block2, _prf2) =
+            create_test_block_with_mint_tx(1, [3], Some(initial_block.block_hash), [2; 32]);
+        let (block3, _prf3) =
+            create_test_block_with_mint_tx(2, [4], Some(block2.block_hash), [3; 32]);
+
+        let initial_blocks = vec![initial_block.clone()];
+        let blocks_chain_1 = vec![initial_block.clone(), block2.clone(), block3.clone()];
+        let blocks_chain_2 = vec![
+            initial_block.clone(), // first block in both chains
+            TestBlock {
+                in_main_chain: false, // was in the main chain, after reorg is not
+                ..block2
+            },
+            TestBlock {
+                in_main_chain: false, // was in the main chain, after reorg is not
+                ..block3
+            },
+            forked_block.clone(),
+        ];
+
+        let blocks = Rc::new(RefCell::new(initial_blocks));
+        let client = TestBitcoinClient {
+            blocks: blocks.clone(),
+        };
+        let storage = MemoryIndexStorage::new();
+        let bags = BagMemoryStorage::new();
+        let mut index = Index::new(client, storage, bags, None);
+
+        index.add_bag([1; 32]).unwrap();
+        index.add_bag([2; 32]).unwrap();
+        index.add_bag([3; 32]).unwrap();
+
+        *blocks.borrow_mut() = blocks_chain_1.clone();
+        index.check_reorgs();
+
+        assert_eq!(index.current_height, 2);
+        assert_eq!(index.bids_storage.get_blocks_count().unwrap(), 2);
+
+        *blocks.borrow_mut() = blocks_chain_2.clone();
+        index.check_reorgs();
+
+        assert_eq!(index.current_height, 1);
+        assert_eq!(index.bids_storage.get_blocks_count().unwrap(), 1);
+
+        let txs_in_index = index
+            .bids_storage
+            .get_records_by_block_hash(&forked_block.block_hash)
+            .unwrap();
+        let forked_block_tx_out = &txs_in_index[0];
+        assert_eq!(forked_block_tx_out.data.bag_id, [1; 32]);
+    }
 }
