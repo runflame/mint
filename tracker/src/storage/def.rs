@@ -26,7 +26,7 @@ pub trait BidStorage {
 
 #[derive(Debug, Error)]
 pub enum BidStorageError<T: Error> {
-    #[error("Bag with id TODO does not exists.")]
+    #[error("Bag with id {0} does not exists.")]
     BagDoesNotExists(BagId),
 
     #[error(transparent)]

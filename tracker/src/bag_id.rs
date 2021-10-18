@@ -1,4 +1,6 @@
+use bitcoin::hashes::hex::ToHex;
 use std::convert::TryFrom;
+use std::fmt::{Display, Formatter};
 
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, PartialOrd, Ord)]
 pub struct BagId(pub [u8; 32]);
@@ -20,6 +22,14 @@ impl<'a> TryFrom<&'a [u8]> for BagId {
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         Ok(BagId(<_>::try_from(value)?))
+    }
+}
+
+impl Display for BagId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        // TODO: better representation?
+        let hex = self.0.to_hex();
+        f.write_str(&hex)
     }
 }
 

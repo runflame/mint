@@ -284,7 +284,7 @@ pub enum TrackerError<C: Error, S: Error> {
     #[error("Transaction output has wrong format.")]
     WrongOutputFormat,
 
-    #[error("Expected bag id TODO found bag id TODO in transaction {tx}")]
+    #[error("Expected bag id {expected} but found bag id {actual} in transaction {tx}")]
     WrongBagId {
         tx: Txid,
         expected: BagId,
