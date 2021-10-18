@@ -1,4 +1,4 @@
-use crate::index::BagId;
+use crate::bag_id::BagId;
 use crate::record::{BidTx, Outpoint};
 use bitcoin::blockdata::script;
 use bitcoin::consensus::Encodable;
@@ -84,7 +84,7 @@ pub trait BitcoinMintExt: BitcoinClient {
         use bitcoin::hashes::sha256;
         use bitcoin::hashes::Hash;
 
-        let hash = sha256::Hash::from_slice(bag_id).expect("Bag id has 32 bytes, as sha256");
+        let hash = sha256::Hash::from_slice(&bag_id.0).expect("Bag id has 32 bytes, as sha256");
         let tx = Transaction {
             version: 2,
             lock_time: 0,
@@ -119,7 +119,7 @@ fn find_out_pos_mint_tx(tx: &Transaction, bag: &BagId) -> u64 {
         .enumerate()
         .find_map(|(i, out)| match out.script_pubkey.is_v0_p2wsh() {
             true => {
-                if &out.script_pubkey.as_bytes()[2..34] == bag {
+                if &out.script_pubkey.as_bytes()[2..34] == &bag.0 {
                     Some(i as u64)
                 } else {
                     None

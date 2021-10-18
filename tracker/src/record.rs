@@ -1,4 +1,4 @@
-use crate::index::BagId;
+use crate::bag_id::BagId;
 use bitcoin::{BlockHash, Txid};
 use std::hash::Hash;
 
@@ -45,7 +45,7 @@ pub struct BidTx {
 }
 
 impl BidTx {
-    pub fn new(outpoint: Outpoint, bag_id: [u8; 32]) -> Self {
+    pub fn new(outpoint: Outpoint, bag_id: BagId) -> Self {
         BidTx { outpoint, bag_id }
     }
 }

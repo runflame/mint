@@ -1,13 +1,14 @@
+use std::convert::TryFrom;
+use std::error::Error;
+
+use bitcoin::{Block, BlockHash, Transaction, TxOut, Txid};
+use bitcoincore_rpc::json::GetBlockHeaderResult;
+use thiserror::Error;
+
+use crate::bag_id::BagId;
 use crate::bitcoin_client::{BitcoinClient, ClientError};
 use crate::record::{BidEntry, BidEntryData, BidProof, BidTx, Outpoint};
 use crate::storage::{BidStorage, BidStorageError};
-use bitcoin::{Block, BlockHash, Transaction, TxOut, Txid};
-use bitcoincore_rpc::json::GetBlockHeaderResult;
-use std::convert::TryFrom;
-use std::error::Error;
-use thiserror::Error;
-
-pub type BagId = [u8; 32];
 
 pub struct Index<C: BitcoinClient, S: BidStorage> {
     btc_client: C,
@@ -34,8 +35,8 @@ impl<C: BitcoinClient, S: BidStorage> Index<C, S> {
         })
     }
 
-    pub fn add_bag(&self, bag: BagId) -> Result<(), BidStorageError<S::Err>> {
-        self.bids_storage.insert_unconfirmed_bag(bag)
+    pub fn add_bag(&self, bag: impl Into<BagId>) -> Result<(), BidStorageError<S::Err>> {
+        self.bids_storage.insert_unconfirmed_bag(bag.into())
     }
 
     // TODO: better API for indexing
@@ -293,11 +294,13 @@ pub enum TrackerError<C: Error, S: Error> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::storage::memory::MemoryIndexStorage;
-    use crate::test_utils::*;
     use std::cell::RefCell;
     use std::rc::Rc;
+
+    use crate::storage::memory::MemoryIndexStorage;
+    use crate::test_utils::*;
+
+    use super::*;
 
     #[test]
     fn test_new_blocks_with_mint_txs() {

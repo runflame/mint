@@ -1,7 +1,7 @@
 mod utils;
 use bitcoincore_rpc::RpcApi;
+use tracker::bag_id::BagId;
 use tracker::bitcoin_client::BitcoinMintExt;
-use tracker::index::BagId;
 use tracker::record::BidProof;
 use tracker::storage::memory::MemoryIndexStorage;
 use tracker::storage::BidStorage;
@@ -37,10 +37,10 @@ fn test_reorg_longest_chain() {
     const HEIGHT_BEFORE_FORK: u64 = GENERATED_BLOCKS * 2;
     const HEIGHT_CHAIN1: u64 = HEIGHT_BEFORE_FORK + 2;
     const HEIGHT_CHAIN2: u64 = HEIGHT_BEFORE_FORK + 3;
-    const BAG1_12: BagId = [1; 32]; // bag #1 on both chains
-    const BAG2_1: BagId = [2; 32]; // bag #2 on chain #1
-    const BAG2_2: BagId = [3; 32]; // bag #2 on chain #2
-    const BAG3_2: BagId = [4; 32]; // bag #3 on chain #2
+    const BAG1_12: BagId = BagId([1; 32]); // bag #1 on both chains
+    const BAG2_1: BagId = BagId([2; 32]); // bag #2 on chain #1
+    const BAG2_2: BagId = BagId([3; 32]); // bag #2 on chain #2
+    const BAG3_2: BagId = BagId([4; 32]); // bag #3 on chain #2
 
     // Connect node1 to node2/
     assert_eq!(client1.get_network_info().unwrap().connections, 0);

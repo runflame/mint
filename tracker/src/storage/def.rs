@@ -1,4 +1,4 @@
-use crate::index::BagId;
+use crate::bag_id::BagId;
 use crate::record::BidEntry;
 use bitcoin::BlockHash;
 use std::error::Error;

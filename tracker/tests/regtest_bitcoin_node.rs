@@ -3,6 +3,7 @@ mod utils;
 use crate::utils::generate_block;
 use crate::utils::init_client;
 
+use tracker::bag_id::BagId;
 use tracker::bitcoin_client::BitcoinMintExt;
 use tracker::record::BidProof;
 use tracker::storage::memory::MemoryIndexStorage;
@@ -32,7 +33,7 @@ fn test_new_blocks_with_mint_txs<S: BidStorage>(storage: S, dir: &str, offset: u
     let (_dir, _child, client, address) = init_client(dir, GENERATED_BLOCKS, offset);
 
     // create mint transaction
-    let bid_tx = client.send_mint_transaction(1000, &[1; 32]).unwrap();
+    let bid_tx = client.send_mint_transaction(1000, &BagId([1; 32])).unwrap();
     let mint_block = generate_block(&client, &address, &bid_tx.outpoint.txid);
 
     let mut index = Index::new(client, storage, Some(119)).unwrap();

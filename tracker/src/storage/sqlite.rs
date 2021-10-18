@@ -1,4 +1,4 @@
-use crate::index::BagId;
+use crate::bag_id::BagId;
 use crate::record::{BidEntry, BidProof, BidTx, Outpoint};
 use crate::storage::def::BidStorageError;
 use crate::storage::BidStorage;
@@ -55,7 +55,7 @@ impl BidStorage for SqliteIndexStorage {
                 record.proof.btc_block.as_ref(),
                 record.proof.tx.outpoint.txid.as_ref(),
                 record.proof.tx.outpoint.out_pos,
-                &record.proof.tx.bag_id as &[_],
+                &record.proof.tx.bag_id,
                 record.amount
             ],
         )?;
@@ -115,7 +115,7 @@ impl BidStorage for SqliteIndexStorage {
     fn remove_bag(&self, bag: &BagId) -> Result<(), BidStorageError<Self::Err>> {
         let deleted = self
             .connection
-            .execute("DELETE FROM records WHERE bag_id = ?1;", [bag as &[_]])?;
+            .execute("DELETE FROM records WHERE bag_id = ?1;", [bag])?;
         if deleted == 0 {
             Err(BidStorageError::BagDoesNotExists(*bag))
         } else {
@@ -130,7 +130,7 @@ impl BidStorage for SqliteIndexStorage {
                 &rusqlite::types::Null,
                 &rusqlite::types::Null,
                 &rusqlite::types::Null,
-                &bag as &[_],
+                &bag,
                 &rusqlite::types::Null
             ],
         )?;
@@ -145,7 +145,7 @@ impl BidStorage for SqliteIndexStorage {
                 record.proof.tx.outpoint.txid.as_ref(),
                 record.proof.tx.outpoint.out_pos,
                 record.amount,
-                &record.proof.tx.bag_id as &[_]
+                &record.proof.tx.bag_id
             ],
         )?;
         if updated == 0 {
@@ -155,22 +155,22 @@ impl BidStorage for SqliteIndexStorage {
         }
     }
 
-    fn is_bag_exists(&self, bag: &[u8; 32]) -> Result<bool, BidStorageError<Self::Err>> {
+    fn is_bag_exists(&self, bag: &BagId) -> Result<bool, BidStorageError<Self::Err>> {
         self.connection
             .query_row(
                 "SELECT EXISTS(SELECT 1 FROM records WHERE bag_id = ?1)",
-                [bag as &[_]],
+                [bag],
                 |row| row.get(0),
             )
             .map_err(Into::into)
     }
 
-    fn is_bag_confirmed(&self, bag: &[u8; 32]) -> Result<bool, BidStorageError<Self::Err>> {
+    fn is_bag_confirmed(&self, bag: &BagId) -> Result<bool, BidStorageError<Self::Err>> {
         let (exists, confirmed) = self.connection.query_row(
             "SELECT \
                 EXISTS(SELECT 1 FROM records WHERE bag_id = ?1), \
                 EXISTS(SELECT 1 FROM records WHERE bag_id = ?1 AND block IS NOT NULL)",
-            [bag as &[_]],
+            [bag],
             |row| -> Result<(bool, bool), _> { Ok((row.get(0)?, row.get(1)?)) },
         )?;
         if !exists {
@@ -222,7 +222,7 @@ mod tests {
             amount,
             proof: BidProof::new(
                 BlockHash::hash(&block),
-                BidTx::new(Outpoint::new(Txid::hash(&txid), out_pos), bag_id),
+                BidTx::new(Outpoint::new(Txid::hash(&txid), out_pos), BagId(bag_id)),
             ),
         }
     }

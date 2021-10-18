@@ -1,4 +1,4 @@
-use crate::index::BagId;
+use crate::bag_id::BagId;
 use crate::record::BidEntry;
 use crate::storage::def::BidStorageError;
 use crate::storage::BidStorage;
@@ -33,7 +33,7 @@ impl BidStorage for MemoryIndexStorage {
         Ok(())
     }
 
-    fn insert_unconfirmed_bag(&self, bag: [u8; 32]) -> Result<(), BidStorageError<Self::Err>> {
+    fn insert_unconfirmed_bag(&self, bag: BagId) -> Result<(), BidStorageError<Self::Err>> {
         let mut this = self.unconfirmed.borrow_mut();
         this.insert(bag);
         Ok(())
