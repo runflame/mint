@@ -29,6 +29,9 @@ pub enum BidStorageError<T: Error> {
     #[error("Bag with id {0} does not exists.")]
     BagDoesNotExists(BagId),
 
+    #[error("Bid has wrong format of record.")]
+    WrongFormat,
+
     #[error(transparent)]
     Other(#[from] T),
 }

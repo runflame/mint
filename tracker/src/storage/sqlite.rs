@@ -85,31 +85,19 @@ impl BidStorage for SqliteIndexStorage {
         )?;
 
         let res = stmt.query_map([hash.as_ref()], |row| {
-            Ok(BidEntry {
+            Ok(BidEntryRaw {
+                btc_block: row.get(0)?,
+                txid: row.get(1)?,
+                out_pos: row.get(2)?,
+                bag_id: row.get(3)?,
                 amount: row.get(4)?,
-                proof: BidProof {
-                    btc_block: {
-                        let vec: Vec<u8> = row.get(0)?;
-                        BlockHash::from_slice(&vec).expect("TODO: handle the error")
-                    },
-                    tx: BidTx {
-                        outpoint: Outpoint {
-                            txid: {
-                                let vec: Vec<u8> = row.get(1)?;
-                                Txid::from_slice(&vec).expect("TODO: handle the error")
-                            },
-                            out_pos: row.get(2)?,
-                        },
-                        bag_id: {
-                            let vec: Vec<u8> = row.get(3)?;
-                            TryFrom::try_from(vec.as_slice()).expect("TODO: handle the error")
-                        },
-                    },
-                },
             })
         });
 
-        res.and_then(|cursor| cursor.collect()).map_err(Into::into)
+        let raw = res.and_then(|cursor| cursor.collect::<Result<Vec<_>, _>>())?;
+        raw.into_iter()
+            .map(|raw| raw.try_into_bid().ok_or(BidStorageError::WrongFormat))
+            .collect()
     }
 
     fn remove_bag(&self, bag: &BagId) -> Result<(), BidStorageError<Self::Err>> {
@@ -178,6 +166,32 @@ impl BidStorage for SqliteIndexStorage {
         } else {
             Ok(confirmed)
         }
+    }
+}
+
+struct BidEntryRaw {
+    amount: u64,
+    btc_block: Vec<u8>,
+    bag_id: Vec<u8>,
+    txid: Vec<u8>,
+    out_pos: u64,
+}
+
+impl BidEntryRaw {
+    fn try_into_bid(self) -> Option<BidEntry> {
+        Some(BidEntry {
+            amount: self.amount,
+            proof: BidProof {
+                btc_block: BlockHash::from_slice(&self.btc_block).ok()?,
+                tx: BidTx {
+                    outpoint: Outpoint {
+                        txid: Txid::from_slice(&self.txid).ok()?,
+                        out_pos: self.out_pos,
+                    },
+                    bag_id: TryFrom::try_from(self.bag_id.as_slice()).ok()?,
+                },
+            },
+        })
     }
 }
 
