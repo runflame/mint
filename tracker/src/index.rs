@@ -87,17 +87,19 @@ impl<C: BitcoinClient, S: BidStorage, B: BagStorage> Index<C, S, B> {
         let new_btc_info = self.btc_client.get_blockchain_info().unwrap();
         let new_height = new_btc_info.blocks;
 
-        match self.check_btc_for_reorgs() {
+        let reorg = match self.check_btc_for_reorgs() {
             Some(reorg) => {
                 self.remove_btc_blocks_when_fork(&reorg);
-                self.add_btc_blocks(reorg.height_when_fork, new_height);
+                self.current_height = reorg.height_when_fork;
+                self.current_tip = reorg.fork_root;
+
                 Some(reorg)
             }
-            None => {
-                self.add_btc_blocks(self.current_height, new_height);
-                None
-            }
-        }
+            None => None,
+        };
+        self.add_btc_blocks(self.current_height, new_height);
+
+        reorg
     }
 
     fn remove_btc_blocks_when_fork(&mut self, reorg_info: &ReorgInfo) {
@@ -142,6 +144,7 @@ impl<C: BitcoinClient, S: BidStorage, B: BagStorage> Index<C, S, B> {
         if reorg {
             Some(ReorgInfo {
                 height_when_fork: height as u64,
+                fork_root: block_hash,
                 discarded_blocks,
             })
         } else {
@@ -247,6 +250,7 @@ fn is_block_in_main_chain(block: &GetBlockHeaderResult) -> bool {
 #[derive(Debug, PartialEq)]
 pub struct ReorgInfo {
     height_when_fork: u64,
+    fork_root: BlockHash, // Block that available in both chains.
     discarded_blocks: Vec<BlockHash>,
 }
 
