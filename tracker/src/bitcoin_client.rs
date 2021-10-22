@@ -10,6 +10,9 @@ use bitcoincore_rpc::json::{
 use bitcoincore_rpc::{RawTx, RpcApi};
 use std::error::Error;
 
+/// Error returned from the `BitcoinClient` trait.
+///
+/// It is need to avoid problems with transformation `BitcoinClient::Err` into `TrackerError`.
 #[derive(Debug, thiserror::Error)]
 pub struct ClientError<Err>(#[source] pub Err);
 
@@ -75,6 +78,7 @@ impl BitcoinClient for bitcoincore_rpc::Client {
     }
 }
 
+/// Extensions for the mint processing.
 pub trait BitcoinMintExt: BitcoinClient {
     fn send_mint_transaction(
         &self,
@@ -111,8 +115,8 @@ pub trait BitcoinMintExt: BitcoinClient {
     }
 }
 
-// Bitcoin node does not guarantee that change of outputs does not change, so we must find bid
-// output from signed transaction
+// Bitcoin node does not guarantee that position of outputs does not change, so we must find bid
+// output from signed transaction.
 fn find_out_pos_mint_tx(tx: &Transaction, bag: &BagId) -> u64 {
     tx.output
         .iter()
@@ -132,7 +136,7 @@ fn find_out_pos_mint_tx(tx: &Transaction, bag: &BagId) -> u64 {
 
 impl<T: BitcoinClient> BitcoinMintExt for T {}
 
-// `bitcoin` crate provide uparseable output with it's `consensus_encode` method for transactions
+// `bitcoin` crate provides unparseable output with it's `consensus_encode` method for transactions
 // with zero inputs.
 fn consensus_encode_tx<S: std::io::Write>(
     tx: &Transaction,

@@ -2,6 +2,7 @@ use bitcoin::hashes::hex::ToHex;
 use std::convert::TryFrom;
 use std::fmt::{Display, Formatter};
 
+/// Newtype for the bag id `[u8; 32]`.
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, PartialOrd, Ord)]
 pub struct BagId(pub [u8; 32]);
 

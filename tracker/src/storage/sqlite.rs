@@ -9,12 +9,13 @@ use rusqlite::Connection;
 use std::convert::TryFrom;
 use std::path::Path;
 
+/// Bid storage used `sqlite`.
 #[derive(Debug)]
-pub struct SqliteIndexStorage {
+pub struct BidSqliteStorage {
     connection: Connection,
 }
 
-impl SqliteIndexStorage {
+impl BidSqliteStorage {
     pub fn new<P: AsRef<Path>>(path: P) -> Self {
         Self::with_connection(Connection::open(path).unwrap())
     }
@@ -22,13 +23,13 @@ impl SqliteIndexStorage {
         Self::with_connection(Connection::open_in_memory().unwrap())
     }
     pub fn with_connection(connection: Connection) -> Self {
-        let this = SqliteIndexStorage { connection };
+        let this = BidSqliteStorage { connection };
         this.init_tables();
         this
     }
 }
 
-impl SqliteIndexStorage {
+impl BidSqliteStorage {
     fn init_tables(&self) {
         self.connection
             .execute(
@@ -45,7 +46,7 @@ impl SqliteIndexStorage {
     }
 }
 
-impl BidStorage for SqliteIndexStorage {
+impl BidStorage for BidSqliteStorage {
     type Err = rusqlite::Error;
 
     fn insert_bid(&self, record: BidEntry) -> Result<(), BidStorageError<Self::Err>> {
@@ -152,21 +153,6 @@ impl BidStorage for SqliteIndexStorage {
             )
             .map_err(Into::into)
     }
-
-    fn is_bag_confirmed(&self, bag: &BagId) -> Result<bool, BidStorageError<Self::Err>> {
-        let (exists, confirmed) = self.connection.query_row(
-            "SELECT \
-                EXISTS(SELECT 1 FROM records WHERE bag_id = ?1), \
-                EXISTS(SELECT 1 FROM records WHERE bag_id = ?1 AND block IS NOT NULL)",
-            [bag],
-            |row| -> Result<(bool, bool), _> { Ok((row.get(0)?, row.get(1)?)) },
-        )?;
-        if !exists {
-            Err(BidStorageError::BagDoesNotExists(*bag))
-        } else {
-            Ok(confirmed)
-        }
-    }
 }
 
 struct BidEntryRaw {
@@ -202,7 +188,7 @@ mod tests {
 
     #[test]
     fn sqlite_storage_tests() {
-        let store = SqliteIndexStorage::in_memory();
+        let store = BidSqliteStorage::in_memory();
 
         let record = dummy_record([1; 32], [2; 32], 4, [3; 32], 5);
 

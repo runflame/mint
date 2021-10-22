@@ -2,12 +2,14 @@ use crate::bag_id::BagId;
 use bitcoin::{BlockHash, Txid};
 use std::hash::Hash;
 
+/// Bid entry with full data.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct BidEntry {
     pub amount: u64,
     pub proof: BidProof,
 }
 
+/// Bitcoin outpoint that contains txid and output position.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Outpoint {
     pub txid: Txid,
@@ -26,6 +28,7 @@ pub struct BidEntryData {
     pub amount: u64,
 }
 
+/// Proof that contains all information needed to check existence of bid.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct BidProof {
     pub btc_block: BlockHash,
@@ -38,6 +41,7 @@ impl BidProof {
     }
 }
 
+/// Bid information extracted from bitcoin transaction.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct BidTx {
     pub outpoint: Outpoint,

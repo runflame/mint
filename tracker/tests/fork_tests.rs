@@ -3,7 +3,7 @@ use bitcoincore_rpc::RpcApi;
 use tracker::bag_id::BagId;
 use tracker::bitcoin_client::BitcoinMintExt;
 use tracker::record::BidProof;
-use tracker::storage::memory::MemoryIndexStorage;
+use tracker::storage::memory::BidMemoryStorage;
 use tracker::storage::BidStorage;
 use tracker::Index;
 use utils::*;
@@ -19,7 +19,7 @@ macro_rules! wait {
 
 #[test]
 fn test_reorg_longest_chain() {
-    let storage = MemoryIndexStorage::new();
+    let storage = BidMemoryStorage::new();
 
     let _tempdir = TempDir::new("/tmp/test_reorg_longest_chain/".to_string());
     let dir1 = "/tmp/test_reorg_longest_chain/node1/";
@@ -97,7 +97,7 @@ fn test_reorg_longest_chain() {
     };
 
     // Track chain on node1.
-    let mut index = Index::new(client1, storage, Some(HEIGHT_BEFORE_FORK - 1)).unwrap();
+    let mut index = Index::new(client1, storage).unwrap();
 
     // Tracker has no access to the chain #2, so it cannot prove bags 2_2 and 3_2 now.
     index.add_bid(prf1_12).unwrap();
@@ -119,7 +119,7 @@ fn test_reorg_longest_chain() {
     }
 
     // Reconnect node1 with node2.
-    let client1 = index.btc_client();
+    let client1 = index.get_btc_client();
     add_node_client(client1, &node2_addr);
     assert_eq!(client1.get_network_info().unwrap().connections, 1);
     wait!(client1.get_blockchain_info().unwrap().blocks == HEIGHT_CHAIN2);

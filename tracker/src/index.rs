@@ -10,41 +10,52 @@ use crate::bitcoin_client::{BitcoinClient, ClientError};
 use crate::record::{BidEntry, BidEntryData, BidProof, BidTx, Outpoint};
 use crate::storage::{BidStorage, BidStorageError};
 
+/// Index that store all the bids, bitcoin outpoints, and handles Bitcoin reorganizations.
 pub struct Index<C: BitcoinClient, S: BidStorage> {
     btc_client: C,
-    bids_storage: S,
+    bid_storage: S,
 
     current_height: u64,
     current_tip: BlockHash,
 }
 
 impl<C: BitcoinClient, S: BidStorage> Index<C, S> {
-    pub fn new(
+    /// Create the index with specified bitcoin client and bid storage.
+    pub fn new(client: C, storage: S) -> Result<Self, ClientError<C::Err>> {
+        let info = client.get_blockchain_info()?;
+        let height = info.blocks;
+        Self::with_height(client, storage, height)
+    }
+
+    /// Create the index with specified bitcoin client and bid storage and height.
+    ///
+    /// `height` arg is responsible for height that is selected as current tip of bitcoin chain.
+    pub fn with_height(
         client: C,
         storage: S,
-        base_height: Option<u64>,
+        base_height: u64,
     ) -> Result<Self, ClientError<C::Err>> {
-        let info = client.get_blockchain_info()?;
-        let height = base_height.unwrap_or(info.blocks);
-        let tip = client.get_block_hash(height)?;
+        let tip = client.get_block_hash(base_height)?;
         Ok(Index {
             btc_client: client,
-            current_height: height,
+            current_height: base_height,
             current_tip: tip,
-            bids_storage: storage,
+            bid_storage: storage,
         })
     }
 
+    /// Add unconfirmed bag to the tracker.
+    ///
+    /// It will be used in `check_reorgs`. If new block will income, and some transaction output is set
+    /// to the specified bag id, the bag will marked as confirmed in storage.
     pub fn add_bag(&self, bag: impl Into<BagId>) -> Result<(), BidStorageError<S::Err>> {
-        self.bids_storage.insert_unconfirmed_bag(bag.into())
+        self.bid_storage.insert_unconfirmed_bag(bag.into())
     }
 
-    // TODO: better API for indexing
     pub fn get_storage(&self) -> &S {
-        &self.bids_storage
+        &self.bid_storage
     }
-
-    pub fn btc_client(&self) -> &C {
+    pub fn get_btc_client(&self) -> &C {
         &self.btc_client
     }
 
@@ -59,7 +70,7 @@ impl<C: BitcoinClient, S: BidStorage> Index<C, S> {
 type IError<C, S> = TrackerError<<C as BitcoinClient>::Err, <S as BidStorage>::Err>;
 
 impl<C: BitcoinClient, S: BidStorage> Index<C, S> {
-    /// Check existence of the bid in the bitcoin chain, and if it is then add it to the store
+    /// Check existence of the bid in the bitcoin chain, and if it is then add it to the storage.
     pub fn add_bid(&mut self, proof: BidProof) -> Result<(), IError<C, S>> {
         let block = self.btc_client.get_block(&proof.btc_block)?;
         let height = self
@@ -91,12 +102,14 @@ impl<C: BitcoinClient, S: BidStorage> Index<C, S> {
             self.current_tip = bid.proof.btc_block;
         }
 
-        self.bids_storage.insert_bid(bid)?;
+        self.bid_storage.insert_bid(bid)?;
 
         Ok(())
     }
 
-    /// Check chain for the reorgs, and if it happened, delete old bids and check for them in new chain
+    /// Check chain for the reorgs, and if it happened, delete old bids and check for them in new chain.
+    ///
+    /// Also checks new blocks for unconfirmed bags are stored in the storage.
     pub fn check_reorgs(&mut self) -> Result<Option<ReorgInfo>, IError<C, S>> {
         let new_btc_info = self.btc_client.get_blockchain_info()?;
         let new_height = new_btc_info.blocks;
@@ -104,7 +117,7 @@ impl<C: BitcoinClient, S: BidStorage> Index<C, S> {
         let reorg = match self.check_btc_for_reorgs()? {
             Some(reorg) => {
                 self.remove_btc_blocks_when_fork(&reorg)?;
-                self.current_height = reorg.height_when_fork;
+                self.current_height = reorg.fork_height;
                 self.current_tip = reorg.fork_root;
 
                 Some(reorg)
@@ -121,7 +134,7 @@ impl<C: BitcoinClient, S: BidStorage> Index<C, S> {
         reorg_info: &ReorgInfo,
     ) -> Result<(), BidStorageError<S::Err>> {
         for discarded_block in reorg_info.discarded_blocks.iter() {
-            match self.bids_storage.remove_with_block_hash(discarded_block) {
+            match self.bid_storage.remove_with_block_hash(discarded_block) {
                 Ok(_) | Err(BidStorageError::BagDoesNotExists(_)) => {}
                 err => return err,
             }
@@ -163,7 +176,7 @@ impl<C: BitcoinClient, S: BidStorage> Index<C, S> {
 
         Ok(if reorg {
             Some(ReorgInfo {
-                height_when_fork: height as u64,
+                fork_height: height as u64,
                 fork_root: block_hash,
                 discarded_blocks,
             })
@@ -176,7 +189,7 @@ impl<C: BitcoinClient, S: BidStorage> Index<C, S> {
         let transactions = self.check_btc_block_with_hash(block_hash.clone())?;
         transactions
             .into_iter()
-            .map(|bid| match self.bids_storage.update_bid(bid) {
+            .map(|bid| match self.bid_storage.update_bid(bid) {
                 Ok(_) | Err(BidStorageError::BagDoesNotExists(_)) => Ok(()),
                 err => err,
             })
@@ -194,7 +207,7 @@ impl<C: BitcoinClient, S: BidStorage> Index<C, S> {
                 parse_mint_transaction_btc_block_unknown_pos(tx)
                     .filter_map(|(outpoint, bid_data)| {
                         let bag_exists = self
-                            .bids_storage
+                            .bid_storage
                             .is_bag_exists(&bid_data.bag_id)
                             .unwrap_or(false);
                         if bag_exists {
@@ -251,7 +264,7 @@ fn parse_mint_btc_output(out: &TxOut) -> Option<BidEntryData> {
     match out.script_pubkey.is_v0_p2wsh() {
         true => {
             let bag_id = BagId::try_from(&out.script_pubkey.as_bytes()[2..34])
-                .expect("Script is in p2wsh form");
+                .expect("Script is in p2wsh form, so it has 32 bytes data.");
             let amount = out.value;
             Some(BidEntryData { bag_id, amount })
         }
@@ -263,27 +276,35 @@ fn is_block_in_main_chain(block: &GetBlockHeaderResult) -> bool {
     block.confirmations != -1
 }
 
+/// Contains info about reorg
 #[derive(Debug, PartialEq)]
 pub struct ReorgInfo {
-    height_when_fork: u64,
-    fork_root: BlockHash, // Block that available in both chains.
-    discarded_blocks: Vec<BlockHash>,
+    /// Height of last block available in both chains.
+    pub fork_height: u64,
+    /// Block that available in both chains.
+    pub fork_root: BlockHash,
+    pub discarded_blocks: Vec<BlockHash>,
 }
 
 #[derive(Debug, Error)]
 pub enum TrackerError<C: Error, S: Error> {
+    /// An error returned from `BitcoinClient`
     #[error(transparent)]
     ClientError(#[from] ClientError<C>),
 
+    /// An error returned from `BidStorage`
     #[error(transparent)]
     StorageError(#[from] BidStorageError<S>),
 
+    /// Transaction with specified txid in specified block does not exists.
     #[error("Transaction with {1} id does not contains in block with {0} id.")]
     TxDoesNotExists(BlockHash, Txid),
 
+    /// Transaction has wrong output format.
     #[error("Transaction output has wrong format.")]
     WrongOutputFormat,
 
+    /// Bag id from `BidProof` does not matches actual data in the transaction output.
     #[error("Expected bag id {expected} but found bag id {actual} in transaction {tx}")]
     WrongBagId {
         tx: Txid,
@@ -297,7 +318,7 @@ mod tests {
     use std::cell::RefCell;
     use std::rc::Rc;
 
-    use crate::storage::memory::MemoryIndexStorage;
+    use crate::storage::memory::BidMemoryStorage;
     use crate::test_utils::*;
 
     use super::*;
@@ -312,18 +333,18 @@ mod tests {
         let client = TestBitcoinClient {
             blocks: blocks.clone(),
         };
-        let storage = MemoryIndexStorage::new();
-        let mut index = Index::new(client, storage, None).unwrap();
+        let storage = BidMemoryStorage::new();
+        let mut index = Index::new(client, storage).unwrap();
 
         index.add_bag([1; 32]).unwrap();
 
         blocks.borrow_mut().push(block2.clone());
         index.add_bid(prf).unwrap();
 
-        assert_eq!(index.bids_storage.get_blocks_count().unwrap(), 1);
+        assert_eq!(index.bid_storage.get_blocks_count().unwrap(), 1);
 
         let txs_in_index = index
-            .bids_storage
+            .bid_storage
             .get_records_by_block_hash(&block2.block_hash)
             .unwrap();
         let block2_tx_out = &txs_in_index[0];
@@ -345,18 +366,18 @@ mod tests {
             blocks: blocks.clone(),
         };
 
-        let storage = MemoryIndexStorage::new();
-        let mut index = Index::new(client, storage, None).unwrap();
+        let storage = BidMemoryStorage::new();
+        let mut index = Index::new(client, storage).unwrap();
         blocks.borrow_mut().push(block2.clone());
 
         index.add_bid(prf1).unwrap();
         index
             .add_bid(BidProof::new(block2.block_hash, prf2))
             .unwrap();
-        assert_eq!(index.bids_storage.get_blocks_count().unwrap(), 1);
+        assert_eq!(index.bid_storage.get_blocks_count().unwrap(), 1);
 
         let mut txs_in_index = index
-            .bids_storage
+            .bid_storage
             .get_records_by_block_hash(&block2.block_hash)
             .unwrap();
         txs_in_index.sort_by(|x, y| x.proof.tx.bag_id.cmp(&y.proof.tx.bag_id));
@@ -392,8 +413,8 @@ mod tests {
         let client = TestBitcoinClient {
             blocks: blocks.clone(),
         };
-        let storage = MemoryIndexStorage::new();
-        let mut index = Index::new(client, storage, None).unwrap();
+        let storage = BidMemoryStorage::new();
+        let mut index = Index::new(client, storage).unwrap();
 
         index.add_bag([1; 32]).unwrap();
         index.add_bag([2; 32]).unwrap();
@@ -403,23 +424,23 @@ mod tests {
         index.check_reorgs().unwrap();
 
         assert_eq!(index.current_height, 1);
-        assert_eq!(index.bids_storage.get_blocks_count().unwrap(), 1);
+        assert_eq!(index.bid_storage.get_blocks_count().unwrap(), 1);
 
         *blocks.borrow_mut() = blocks_chain_2.clone();
         index.check_reorgs().unwrap();
 
         assert_eq!(index.current_height, 2);
-        assert_eq!(index.bids_storage.get_blocks_count().unwrap(), 2);
+        assert_eq!(index.bid_storage.get_blocks_count().unwrap(), 2);
 
         let txs_in_index = index
-            .bids_storage
+            .bid_storage
             .get_records_by_block_hash(&forked_block.block_hash)
             .unwrap();
         let forked_block_tx_out = &txs_in_index[0];
         assert_eq!(forked_block_tx_out.proof.tx.bag_id, [2; 32]);
 
         let txs_in_index = index
-            .bids_storage
+            .bid_storage
             .get_records_by_block_hash(&forked_block2.block_hash)
             .unwrap();
         let forked_block2_tx_out = &txs_in_index[0];
@@ -455,8 +476,8 @@ mod tests {
         let client = TestBitcoinClient {
             blocks: blocks.clone(),
         };
-        let storage = MemoryIndexStorage::new();
-        let mut index = Index::new(client, storage, None).unwrap();
+        let storage = BidMemoryStorage::new();
+        let mut index = Index::new(client, storage).unwrap();
 
         index.add_bag([1; 32]).unwrap();
         index.add_bag([2; 32]).unwrap();
@@ -466,16 +487,16 @@ mod tests {
         index.check_reorgs().unwrap();
 
         assert_eq!(index.current_height, 2);
-        assert_eq!(index.bids_storage.get_blocks_count().unwrap(), 2);
+        assert_eq!(index.bid_storage.get_blocks_count().unwrap(), 2);
 
         *blocks.borrow_mut() = blocks_chain_2.clone();
         index.check_reorgs().unwrap();
 
         assert_eq!(index.current_height, 1);
-        assert_eq!(index.bids_storage.get_blocks_count().unwrap(), 1);
+        assert_eq!(index.bid_storage.get_blocks_count().unwrap(), 1);
 
         let txs_in_index = index
-            .bids_storage
+            .bid_storage
             .get_records_by_block_hash(&forked_block.block_hash)
             .unwrap();
         let forked_block_tx_out = &txs_in_index[0];

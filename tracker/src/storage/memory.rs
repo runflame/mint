@@ -7,23 +7,23 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 
-/// Use it only for tests purposes.
+/// Bid storage used `HashMap` and `HashSet`. Use it only for tests purposes.
 #[derive(Debug)]
-pub struct MemoryIndexStorage {
+pub struct BidMemoryStorage {
     confirmed: RefCell<HashMap<BlockHash, HashMap<BagId, BidEntry>>>,
     unconfirmed: RefCell<HashSet<BagId>>,
 }
 
-impl MemoryIndexStorage {
+impl BidMemoryStorage {
     pub fn new() -> Self {
-        MemoryIndexStorage {
+        BidMemoryStorage {
             confirmed: RefCell::new(HashMap::new()),
             unconfirmed: RefCell::new(HashSet::new()),
         }
     }
 }
 
-impl BidStorage for MemoryIndexStorage {
+impl BidStorage for BidMemoryStorage {
     type Err = Infallible;
 
     fn insert_bid(&self, record: BidEntry) -> Result<(), BidStorageError<Self::Err>> {
@@ -98,15 +98,12 @@ impl BidStorage for MemoryIndexStorage {
     }
 
     fn is_bag_exists(&self, bag: &BagId) -> Result<bool, BidStorageError<Self::Err>> {
-        Ok(self.is_bag_confirmed(bag)? || self.unconfirmed.borrow().contains(bag))
-    }
-
-    fn is_bag_confirmed(&self, bag: &BagId) -> Result<bool, BidStorageError<Self::Err>> {
-        Ok(self
+        let is_confirmed = self
             .confirmed
             .borrow()
             .iter()
             .find(|(_, bids)| bids.get(bag).is_some())
-            .is_some())
+            .is_some();
+        Ok(is_confirmed || self.unconfirmed.borrow().contains(bag))
     }
 }
