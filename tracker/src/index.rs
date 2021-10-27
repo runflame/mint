@@ -11,7 +11,7 @@ use crate::record::{BidEntry, BidEntryData, BidProof, BidTx, Outpoint};
 use crate::storage::{BidStorage, BidStorageError};
 
 /// Index that store all the bids, bitcoin outpoints, and handles Bitcoin reorganizations.
-pub struct Index<C: BitcoinClient, S: BidStorage> {
+pub struct Index<C, S> {
     btc_client: C,
     bid_storage: S,
 
