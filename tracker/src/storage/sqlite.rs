@@ -63,18 +63,72 @@ impl BidStorage for BidSqliteStorage {
         Ok(())
     }
 
+    fn insert_unconfirmed_bag(&self, bag: BagId) -> Result<(), BidStorageError<Self::Err>> {
+        self.connection.execute(
+            "INSERT INTO records VALUES (?1, ?2, ?3, ?4, ?5);",
+            rusqlite::params![
+                &rusqlite::types::Null,
+                &rusqlite::types::Null,
+                &rusqlite::types::Null,
+                &bag,
+                &rusqlite::types::Null
+            ],
+        )?;
+        Ok(())
+    }
+
+    fn update_bid(&self, record: BidEntry) -> Result<(), BidStorageError<Self::Err>> {
+        let updated = self.connection.execute(
+            "UPDATE records SET block=?1, txid=?2, out_pos=?3, amount=?4 WHERE bag_id=?5;",
+            rusqlite::params![
+                record.proof.btc_block.as_ref(),
+                record.proof.tx.outpoint.txid.as_ref(),
+                record.proof.tx.outpoint.out_pos,
+                record.amount,
+                &record.proof.tx.bag_id,
+            ],
+        )?;
+        if updated == 0 {
+            Err(BidStorageError::BagDoesNotExists(record.proof.tx.bag_id))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn remove_confirmation_with_block_hash(
+        &self,
+        hash: &BlockHash,
+    ) -> Result<(), BidStorageError<Self::Err>> {
+        self.connection.execute(
+            "UPDATE records SET block=?1, txid=?2, out_pos=?3, amount=?4 WHERE block=?5;",
+            rusqlite::params![
+                &rusqlite::types::Null,
+                &rusqlite::types::Null,
+                &rusqlite::types::Null,
+                &rusqlite::types::Null,
+                hash.as_ref()
+            ],
+        )?;
+        Ok(())
+    }
+
+    fn remove_bag(&self, bag: &BagId) -> Result<(), BidStorageError<Self::Err>> {
+        let deleted = self
+            .connection
+            .execute("DELETE FROM records WHERE bag_id = ?1;", [bag])?;
+        if deleted == 0 {
+            Err(BidStorageError::BagDoesNotExists(*bag))
+        } else {
+            Ok(())
+        }
+    }
+
     fn get_blocks_count(&self) -> Result<u64, BidStorageError<Self::Err>> {
         self.connection
             .query_row("SELECT COUNT(DISTINCT block) FROM records;", [], |row| {
                 row.get(0)
             })
             .map_err(Into::into)
-    }
-
-    fn remove_with_block_hash(&self, hash: &BlockHash) -> Result<(), BidStorageError<Self::Err>> {
-        self.connection
-            .execute("DELETE FROM records WHERE block = ?1;", [hash.as_ref()])?;
-        Ok(())
     }
 
     fn get_records_by_block_hash(
@@ -99,49 +153,6 @@ impl BidStorage for BidSqliteStorage {
         raw.into_iter()
             .map(|raw| raw.try_into_bid().ok_or(BidStorageError::WrongFormat))
             .collect()
-    }
-
-    fn remove_bag(&self, bag: &BagId) -> Result<(), BidStorageError<Self::Err>> {
-        let deleted = self
-            .connection
-            .execute("DELETE FROM records WHERE bag_id = ?1;", [bag])?;
-        if deleted == 0 {
-            Err(BidStorageError::BagDoesNotExists(*bag))
-        } else {
-            Ok(())
-        }
-    }
-
-    fn insert_unconfirmed_bag(&self, bag: BagId) -> Result<(), BidStorageError<Self::Err>> {
-        self.connection.execute(
-            "INSERT INTO records VALUES (?1, ?2, ?3, ?4, ?5);",
-            rusqlite::params![
-                &rusqlite::types::Null,
-                &rusqlite::types::Null,
-                &rusqlite::types::Null,
-                &bag,
-                &rusqlite::types::Null
-            ],
-        )?;
-        Ok(())
-    }
-
-    fn update_bid(&self, record: BidEntry) -> Result<(), BidStorageError<Self::Err>> {
-        let updated = self.connection.execute(
-            "UPDATE records SET block=?1, txid=?2, out_pos=?3, amount=?4 WHERE bag_id=?5;",
-            rusqlite::params![
-                record.proof.btc_block.as_ref(),
-                record.proof.tx.outpoint.txid.as_ref(),
-                record.proof.tx.outpoint.out_pos,
-                record.amount,
-                &record.proof.tx.bag_id
-            ],
-        )?;
-        if updated == 0 {
-            Err(BidStorageError::BagDoesNotExists(record.proof.tx.bag_id))
-        } else {
-            Ok(())
-        }
     }
 
     fn is_bag_exists(&self, bag: &BagId) -> Result<bool, BidStorageError<Self::Err>> {
@@ -201,7 +212,7 @@ mod tests {
         assert_eq!(records, vec![record.clone()]);
 
         store
-            .remove_with_block_hash(&record.proof.btc_block)
+            .remove_confirmation_with_block_hash(&record.proof.btc_block)
             .unwrap();
         assert_eq!(store.get_blocks_count().unwrap(), 0);
 

@@ -44,7 +44,10 @@ impl BidStorage for BidMemoryStorage {
         self.insert_bid(record)
     }
 
-    fn remove_with_block_hash(&self, hash: &BlockHash) -> Result<(), BidStorageError<Self::Err>> {
+    fn remove_confirmation_with_block_hash(
+        &self,
+        hash: &BlockHash,
+    ) -> Result<(), BidStorageError<Self::Err>> {
         self.confirmed.borrow_mut().remove(hash);
         Ok(())
     }

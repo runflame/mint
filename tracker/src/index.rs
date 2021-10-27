@@ -134,7 +134,10 @@ impl<C: BitcoinClient, S: BidStorage> Index<C, S> {
         reorg_info: &ReorgInfo,
     ) -> Result<(), BidStorageError<S::Err>> {
         for discarded_block in reorg_info.discarded_blocks.iter() {
-            match self.bid_storage.remove_with_block_hash(discarded_block) {
+            match self
+                .bid_storage
+                .remove_confirmation_with_block_hash(discarded_block)
+            {
                 Ok(_) | Err(BidStorageError::BagDoesNotExists(_)) => {}
                 err => return err,
             }

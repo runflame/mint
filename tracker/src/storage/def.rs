@@ -14,7 +14,10 @@ pub trait BidStorage {
     fn update_bid(&self, record: BidEntry) -> Result<(), BidStorageError<Self::Err>>;
 
     /// Remove all confirmed bags with that block hash.
-    fn remove_with_block_hash(&self, hash: &BlockHash) -> Result<(), BidStorageError<Self::Err>>;
+    fn remove_confirmation_with_block_hash(
+        &self,
+        hash: &BlockHash,
+    ) -> Result<(), BidStorageError<Self::Err>>;
     /// Remove the bag, whether it is confirmed or unconfirmed. Return `BidStorageError::BagDoesNotExists` if bag does not exists.
     fn remove_bag(&self, bag: &BagId) -> Result<(), BidStorageError<Self::Err>>;
 
