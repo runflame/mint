@@ -1,0 +1,18 @@
+[package]
+name = "tracker"
+version = "0.1.0"
+authors = ["p0lunin <dmytro.polunin@gmail.com>"]
+edition = "2018"
+
+[features]
+sqlite-storage = ["rusqlite"]
+
+[dependencies]
+bitcoin = "0.26.1"
+bitcoincore-rpc = "0.13.0"
+thiserror = "1.0.30"
+rusqlite = { version = "0.25.3", features = ["bundled", "blob"], optional = true }
+
+[dev-dependencies]
+serde = "1.0.126"
+serde_json = "1.0.64"
